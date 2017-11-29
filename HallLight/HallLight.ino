@@ -18,27 +18,27 @@ void setup()
 {
 	for (byte i = 0; i < CHECK_INPUTS_LEN; i++)
 	{
-		pinMode(CHECK_INPUTS[i], OUTPUT);
+		pinMode(CHECK_INPUTS[i], INPUT);
 	}
 	
-	pinMode(NO_POWER_INPUT, OUTPUT);
-	pinMode(NIGHT_INPUT, OUTPUT);
+	pinMode(NO_POWER_INPUT, INPUT);
+	pinMode(NIGHT_INPUT, INPUT);
 
-	pinMode(led, OUTPUT);
+	pinMode(DIMMER_OUTPUT, OUTPUT);
 }
 
 // the loop routine runs over and over again forever:
 void loop() {
-	// set the brightness of pin 9:
-	analogWrite(led, brightness);
+	analogWrite(DIMMER_OUTPUT, 255);
+	//analogWrite(DIMMER_OUTPUT, _brightness);
 
 	// change the brightness for next time through the loop:
-	brightness = brightness + fadeAmount;
+	//_brightness += _fadeAmount;
 
-	// reverse the direction of the fading at the ends of the fade:
-	if (brightness <= 0 || brightness >= 255) {
-		fadeAmount = -fadeAmount;
-	}
-	// wait for 30 milliseconds to see the dimming effect
-	delay(30);
+	//// reverse the direction of the fading at the ends of the fade:
+	//if (brightness <= 0 || brightness >= 255) {
+	//	fadeAmount = -fadeAmount;
+	//}
+	//// wait for 30 milliseconds to see the dimming effect
+	//delay(30);
 }
