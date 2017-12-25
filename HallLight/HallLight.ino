@@ -10,11 +10,12 @@ const byte CHECK_INPUTS[CHECK_INPUTS_LEN] = { A0, 15, 14, 16, 10, 2, 3, 4, 5, 6 
 const byte NO_POWER_INPUT = 7;
 const byte NIGHT_INPUT = 8;
 const byte DIMMER_OUTPUT = 9;
+const byte LIGHTS_IS_ON = A1;
 
 const int MAX_BRIGHTNESS = 255;
 const int MAX_BRIGHTNESS_NIGHT = 85;
 const int MAX_BRIGHTNESS_NO_POWER = 127;
-const unsigned long DELAY_LIGHTS_ON_MS = 5000; // 60000 One minute is on
+const unsigned long DELAY_LIGHTS_ON_MS = 60000; //5000; // 60000 One minute is on
 const unsigned long FADE_DELAY_ON_MS = 6; // 30
 const unsigned long FADE_DELAY_OFF_MS = 100; // 100
 const int FADE_POINTS = 1;    // 5 how many points to fade the LED by
@@ -29,6 +30,10 @@ void setup()
 {
 	Serial.begin(57600);
 
+#ifdef DEBUG
+	Serial.println("Hall light project is started");
+#endif // DEBUG
+
 	for (byte i = 0; i < CHECK_INPUTS_LEN; i++)
 	{
 		pinMode(CHECK_INPUTS[i], INPUT);
@@ -41,6 +46,7 @@ void setup()
 	pinMode(NIGHT_INPUT, INPUT);
 
 	pinMode(DIMMER_OUTPUT, OUTPUT);
+	pinMode(LIGHTS_IS_ON, OUTPUT);
 }
 
 void loop() 
@@ -48,23 +54,14 @@ void loop()
 	bool inState = processInputs();
 
 	bool lighState = processState(inState);
+
 	int maxBrightness = getMaxBrightness();
 
-	int brightness = processBrightness(lighState, maxBrightness);
+	int newBrightness = processBrightness(lighState, _brightness, maxBrightness);
 
-	setBrightness(brightness);
-	
-	//analogWrite(DIMMER_OUTPUT, _brightness);
+	setBrightness(newBrightness);
 
-	// change the brightness for next time through the loop:
-	//_brightness += _fadeAmount;
-
-	//// reverse the direction of the fading at the ends of the fade:
-	//if (brightness <= 0 || brightness >= 255) {
-	//	fadeAmount = -fadeAmount;
-	//}
-	//// wait for 30 milliseconds to see the dimming effect
-	//delay(30);
+	digitalWrite(LIGHTS_IS_ON, _brightness > 0 ? HIGH : LOW);
 }
 
 void setBrightness(int brightness)
@@ -80,25 +77,30 @@ void setBrightness(int brightness)
 	}
 }
 
-int processBrightness(bool lighState, int maxBrightness)
+int processBrightness(bool lighState, int currentBrightness, int maxBrightness)
 {
 	unsigned long time = millis();
 
 	if (_fadeDelay > time)
 	{
-		return;
+		return currentBrightness;
 	}
 
-	int brightness = _brightness;
+	int newBrightness = currentBrightness;
 
+	if (newBrightness > maxBrightness)
+	{
+		newBrightness = maxBrightness;
+	}
+	
 	if (lighState) // On
 	{
-		if (brightness < maxBrightness)
+		if (newBrightness < maxBrightness)
 		{
-			brightness += FADE_POINTS;
-			if (brightness > maxBrightness)
+			newBrightness += FADE_POINTS;
+			if (newBrightness > maxBrightness)
 			{
-				brightness = maxBrightness;
+				newBrightness = maxBrightness;
 			}
 
 			_fadeDelay = time + FADE_DELAY_ON_MS;
@@ -107,19 +109,19 @@ int processBrightness(bool lighState, int maxBrightness)
 	}
 	else // Off
 	{
-		if (brightness > 0)
+		if (newBrightness > 0)
 		{
-			brightness -= FADE_POINTS;
-			if (brightness < 0)
+			newBrightness -= FADE_POINTS;
+			if (newBrightness < 0)
 			{
-				brightness = 0;
+				newBrightness = 0;
 			}
 
 			_fadeDelay = time + FADE_DELAY_OFF_MS;
 		}
 	}
 
-	return brightness;
+	return newBrightness;
 }
 
 bool processState(bool inState)
@@ -128,9 +130,6 @@ bool processState(bool inState)
 
 	if (inState)
 	{
-#ifdef DEBUG
-		Serial.println("State changed");
-#endif // DEBUG
 		_lightDelay = time + DELAY_LIGHTS_ON_MS;
 		_fadeDelay = 0;
 	}
@@ -140,23 +139,19 @@ bool processState(bool inState)
 
 int getMaxBrightness()
 {
-	int maxBrightnes = MAX_BRIGHTNESS;
-
 	// Night arrived - active High
 	if (digitalRead(NIGHT_INPUT) == HIGH)
 	{
-		maxBrightnes = MAX_BRIGHTNESS_NIGHT;
-		return;
+		return MAX_BRIGHTNESS_NIGHT;
 	}
 
 	// No main power - active Low
 	if (digitalRead(NO_POWER_INPUT) == LOW)
 	{
-		maxBrightnes = MAX_BRIGHTNESS_NO_POWER;
-		return;
+		return MAX_BRIGHTNESS_NO_POWER;
 	}
 
-	return maxBrightnes;
+	return MAX_BRIGHTNESS;
 }
 
 bool processInputs()
@@ -169,6 +164,11 @@ bool processInputs()
 		
 		if (inputState != _inputState[i])
 		{
+#ifdef DEBUG
+			Serial.print(CHECK_INPUTS[i]);
+			Serial.print(" Input is changed: ");
+			Serial.println(_inputState[i]);
+#endif // DEBUG
 			_inputState[i] = inputState;
 			result = true;
 		}
