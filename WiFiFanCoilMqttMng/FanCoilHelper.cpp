@@ -22,7 +22,7 @@ bool connectWiFi()
 {
 	if (WiFi.status() != WL_CONNECTED)
 	{
-		DEBUG_FC_PRINT(F("Reconnecting ["));
+		DEBUG_FC_PRINT(F("Connecting ["));
 		DEBUG_FC_PRINT(WiFi.SSID());
 		DEBUG_FC_PRINTLN(F("]..."));
 

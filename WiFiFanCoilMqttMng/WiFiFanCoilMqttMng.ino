@@ -242,14 +242,24 @@ void setup(void)
 	// Is OptoIn 4 is On the board is resetting WiFi configuration.
 	if (KMPDinoWiFiESP.GetOptoInState(OptoIn4))
 	{
-		DEBUG_FC_PRINTLN(F("Resetting WiFi configuration...\r\n"));
+		DEBUG_FC_PRINTLN(F("Resetting WiFi configuration..."));
 		wifiManager.resetSettings();
-		DEBUG_FC_PRINTLN(F("WiFi configuration was reseted.\r\n"));
+		DEBUG_FC_PRINTLN(F("WiFi configuration was reseted."));
 	}
 
 	// Set save configuration callback.
 	wifiManager.setSaveConfigCallback(saveConfigCallback);
 
+	DEBUG_FC_PRINTLN(F("Waiting WiFi up..."));
+	// If the Fan coil (device) starts together with WiFi, need time to initialize WiFi router.
+	// During this time (60 seconds) device trying to connect to WiFi.
+	int i = 0;
+	while (!connectWiFi() && i++ < 12)
+	{
+		// Wait for 5 second before try again.
+		delay(5000);
+	}
+	
 	if (!mangeConnectParamers(&wifiManager, &_settings))
 	{
 		return;
@@ -277,7 +287,7 @@ void loop(void)
 
 	if (!_isConnected)
 	{
-		// Turn off a device
+		// Turn off the device
 		setDeviceState(Off);
 		uint8_t degree = processFanDegree();
 		setFanDegree(degree);
