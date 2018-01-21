@@ -1,7 +1,7 @@
-// FanCoilHelper.h
+// DoorOpenerHelper.h
 
-#ifndef _FANCOILHELPER_h
-#define _FANCOILHELPER_h
+#ifndef _DOOROPENERHELPER_H
+#define _DOOROPENERHELPER_H
 
 #include <FS.h>
 #include "Arduino.h"
@@ -48,7 +48,7 @@ const char CONFIG_FILE_NAME[] = "/config.json";
 
 const char TOPIC_SEPARATOR[] = "/";
 const char TOPIC_SET[] = "set";
-const char TOPIC_DOOR_STATE[] = "doorstate";
+const char TOPIC_DOOR_STATE[] = "state";
 const char PAYLOAD_ON[] = "on";
 const char PAYLOAD_OFF[] = "off";
 const char PAYLOAD_READY[] = "ready";
@@ -76,7 +76,7 @@ struct DeviceSettings
 	char MqttClientId[MQTT_CLIENT_ID_LEN] = "ESP8266Client";
 	char MqttUser[MQTT_USER_LEN];
 	char MqttPass[MQTT_PASS_LEN];
-	char BaseTopic[BASE_TOPIC_LEN] = "flat/door";
+	char BaseTopic[BASE_TOPIC_LEN] = "flat/frontdoor";
 };
 
 #ifdef WIFIFCMM_DEBUG

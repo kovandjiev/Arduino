@@ -1,4 +1,4 @@
-// WiFiFanCoilMqttMng.ino
+// DoorOpenerMqttMng.ino
 // Company: KMP Electronics Ltd, Bulgaria
 // Web: http://kmpelectronics.eu/
 // Supported boards:
@@ -13,7 +13,7 @@
 // Last version date: 10.10.2017
 // Author: Plamen Kovandjiev <p.kovandiev@kmpelectronics.eu>
 
-#include "FanCoilHelper.h"
+#include "DoorOpenerHelper.h"
 #include <KMPDinoWiFiESP.h>       // Our library. https://www.kmpelectronics.eu/en-us/examples/prodinowifi-esp/howtoinstall.aspx
 #include <KMPCommon.h>
 
@@ -21,6 +21,7 @@
 #include <ESP8266WebServer.h>
 #include <PubSubClient.h>         // Install with Library Manager. "PubSubClient by Nick O'Leary" https://pubsubclient.knolleary.net/
 #include <WiFiManager.h>          // Install with Library Manager. "WiFiManager by tzapu" https://github.com/tzapu/WiFiManager
+//#include <ArduinoJson.h>          // Install with Library Manager. "ArduinoJson by Benoit Blanchon" https://github.com/bblanchon/ArduinoJson // Moved in Helper
 
 DeviceSettings _settings;
 
@@ -32,6 +33,7 @@ char _topicBuff[128];
 char _payloadBuff[32];
 
 unsigned long _checkPingInterval;
+unsigned long _doorOpenInterval;
 
 bool _isConnected = false;
 bool _isStarted = false;
@@ -133,7 +135,7 @@ void setup(void)
 	KMPDinoWiFiESP.init();
 	KMPDinoWiFiESP.SetAllRelaysOff();
 
-	DEBUG_FC_PRINTLN(F("KMP flat door opener management with Mqtt.\r\n"));
+	DEBUG_FC_PRINTLN(F("KMP door opener through Mqtt.\r\n"));
 
 	//WiFiManager
 	//Local initialization. Once it's business is done, there is no need to keep it around.
@@ -191,6 +193,11 @@ void loop(void)
 		publishData(DevicePing);
 	}
 
+	if (millis() > _doorOpenInterval)
+	{
+		setDoorState(Off);
+	}
+
 	if (!_isStarted)
 	{
 		_isStarted = true;
@@ -204,6 +211,11 @@ void setDoorState(DoorAction doorAction)
 	{
 		KMPDinoWiFiESP.SetRelayState(DOOR_RELAY, doorAction);
 		publishData(DoorState);
+
+		if (doorAction == On)
+		{
+			_doorOpenInterval = millis() + OPEN_DOOR_INTERVAL_MS;
+		}
 	}
 }
 
