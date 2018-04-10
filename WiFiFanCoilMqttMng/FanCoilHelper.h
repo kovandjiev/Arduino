@@ -46,7 +46,9 @@
 #define INLET_PRECISION 0
 #define CHECK_INLET_INTERVAL_MS CHECK_TEMP_INTERVAL_MS
 
-#define PING_INTERVAL_MS 30000
+#define OK_INTERVAL_MS 60000
+
+#define WAIT_FOR_CONNECT_BEFORE_OFF_MS 360000 // 1 hour
 
 #define MIN_DIFFERENCE_TEMPERATURE 5
 
@@ -86,7 +88,7 @@ const char PAYLOAD_COLD[] = "cold";
 const char PAYLOAD_ON[] = "on";
 const char PAYLOAD_OFF[] = "off";
 const char PAYLOAD_READY[] = "ready";
-const char PAYLOAD_PING[] = "ping";
+const char PAYLOAD_OK[] = "ok";
 
 const char EVERY_ONE_LEVEL_TOPIC[] = "+";
 const char NOT_AVILABLE[] = "N/A";
@@ -117,7 +119,7 @@ enum DeviceData
 	CurrentDeviceState = 32,
 	Humidity = 64,
 	DeviceIsReady = 128,
-	DevicePing = 256,
+	DeviceOk = 256,
 	BypassState = 512
 };
 

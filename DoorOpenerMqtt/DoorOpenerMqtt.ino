@@ -148,20 +148,22 @@ void setup(void)
 		wifiManager.resetSettings();
 		DEBUG_FC_PRINTLN(F("WiFi configuration was reseted."));
 	}
+	else
+	{
+		DEBUG_FC_PRINTLN(F("Waiting WiFi up..."));
+		// If the Fan coil (device) starts together with WiFi, need time to initialize WiFi router.
+		// During this time (60 seconds) device trying to connect to WiFi.
+		int i = 0;
+		while (!connectWiFi() && i++ < 12)
+		{
+			// Wait for 5 second before try again.
+			delay(5000);
+		}
+	}
 
 	// Set save configuration callback.
 	wifiManager.setSaveConfigCallback(saveConfigCallback);
 
-	DEBUG_FC_PRINTLN(F("Waiting WiFi up..."));
-	// If the Fan coil (device) starts together with WiFi, need time to initialize WiFi router.
-	// During this time (60 seconds) device trying to connect to WiFi.
-	int i = 0;
-	while (!connectWiFi() && i++ < 12)
-	{
-		// Wait for 5 second before try again.
-		delay(5000);
-	}
-	
 	if (!mangeConnectParamers(&wifiManager, &_settings))
 	{
 		return;
@@ -193,8 +195,9 @@ void loop(void)
 		publishData(DevicePing);
 	}
 
-	if (millis() > _doorOpenInterval)
+	if (millis() > _doorOpenInterval || !KMPDinoWiFiESP.GetOptoInState(DOOR_IS_OPENED_OPTOIN))
 	{
+		_doorOpenInterval = 0;
 		setDoorState(Off);
 	}
 

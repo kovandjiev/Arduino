@@ -32,11 +32,12 @@
 #define MQTT_PASS_LEN 16
 #define BASE_TOPIC_LEN 32
 
-#define OPEN_DOOR_INTERVAL_MS 10000
+#define OPEN_DOOR_INTERVAL_MS 15000
 
 #define PING_INTERVAL_MS 30000
 
 #define DOOR_RELAY Relay1
+#define DOOR_IS_OPENED_OPTOIN OptoIn1
 
 const char MQTT_SERVER_KEY[] = "mqttServer";
 const char MQTT_PORT_KEY[] = "mqttPort";

@@ -5,21 +5,32 @@ Hall light project is for fade switch on or off lights in my hall.
 #include <avr/wdt.h>
 
 #define CHECK_INPUTS_LEN 10
-#define DEBUG
+//#define DEBUG
 
 // These pins check for change state low, high.
-const byte CHECK_INPUTS[CHECK_INPUTS_LEN] = { A0, 15, 14, 16, 10, 2, 3, 4, 5, 6 };
-const byte NO_POWER_INPUT = 7; // Pull down. 1 - has power, 0 - hasn't power
-const byte IS_NIGHT_INPUT = 8; // Pull down. 0 - day, 1 - night
-const byte DIMMER_OUTPUT = 9;
-const byte LIGHTS_IS_ON_OUTPUT = A1; // 1 - the light is On, 0 - the lights is Off
+const byte CHECK_INPUTS[CHECK_INPUTS_LEN] = { 
+	A0, // PIR1 Hall short part
+	15, // PIR2 Hall long part
+	14, // Door Kitchen and Living room
+	16, // Door Sitting room
+	10, // Door Bedroom 2
+	2,  // Door Toilet
+	3,  // Front door
+	4,  // Door bathroom
+	5,  // Door wet room
+	6   // Door Bedroom 1
+};
+const byte NO_POWER_INPUT = 7; // Power exists 1 - has power, 0 - hasn't power Pull down. Is power down, dimming all lights on 50%.
+const byte IS_NIGHT_INPUT = 8; // Is day or night 0 - day, 1 - night Pull down. Is night arrives, dimming on 30% light.
+const byte DIMMER_OUTPUT = 9;  // Dimmer output PWM. Connect to dimmers.
+const byte LIGHTS_IS_ON_OUTPUT = A1; // 1 - the light is On, 0 - the lights is Off. Events if lights is on pin up to 1.
 
 const int MAX_BRIGHTNESS = 255;
 const int MAX_BRIGHTNESS_NIGHT = 85;
 const int MAX_BRIGHTNESS_NO_POWER = 127;
 const unsigned long DELAY_LIGHTS_ON_MS = 60000; //5000; // 60000 One minute is on
-const unsigned long FADE_DELAY_ON_MS = 8; // 30
-const unsigned long FADE_DELAY_OFF_MS = 100; // 100
+const unsigned long FADE_DELAY_ON_MS = 8; // Waiting before switch to next level up light. Fast up.
+const unsigned long FADE_DELAY_OFF_MS = 100; // Waiting before switch to next level down light. Slow down.
 const int FADE_POINTS = 1;    // 5 how many points to fade the LED by
 
 bool _inputState[CHECK_INPUTS_LEN];
@@ -30,10 +41,10 @@ unsigned long _fadeDelay = 0;
 
 void setup() 
 {
-	Serial.begin(57600);
-
 #ifdef DEBUG
+	Serial.begin(9600);
 	Serial.println("Hall light project is started");
+	Serial.println("Waiting for flash...");
 #endif // DEBUG
 
 	// Wait for 30 seconds for the board has opportunity to flash a new sketch. If comment this row, it can flash only in ISP.
@@ -76,6 +87,9 @@ void setup()
 	// Set Watchdog settings - Reset Enable, cycles 1.0 s.
 	WDTCSR = (1 << WDE) | (0 << WDP3) | (1 << WDP2) | (1 << WDP1) | (0 << WDP0);
 	sei();
+#ifdef DEBUG
+	Serial.println("Start loop");
+#endif // DEBUG
 }
 
 void loop() 

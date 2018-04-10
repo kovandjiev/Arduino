@@ -45,7 +45,7 @@ uint8_t _fanDegree = 0;
 Mode _mode = Cold;
 DeviceState _deviceState = Off;
 DeviceState _lastDeviceState = Off;
-unsigned long _checkPingInterval;
+unsigned long _sendOkInterval;
 
 bool _isConnected = false;
 bool _isStarted = false;
@@ -54,7 +54,7 @@ bool _isDS18b20Exists = true;
 
 void publishData(DeviceData deviceData, bool sendCurrent = false)
 {
-	_checkPingInterval = millis() + PING_INTERVAL_MS;
+	_sendOkInterval = millis() + OK_INTERVAL_MS;
 
 	if (!_isConnected || !_isStarted)
 	{
@@ -130,9 +130,9 @@ void publishData(DeviceData deviceData, bool sendCurrent = false)
 		mqttPublish(_settings.BaseTopic, (char*)PAYLOAD_READY);
 	}
 
-	if (CHECK_ENUM(deviceData, DevicePing))
+	if (CHECK_ENUM(deviceData, DeviceOk))
 	{
-		mqttPublish(_settings.BaseTopic, (char*)PAYLOAD_PING);
+		mqttPublish(_settings.BaseTopic, (char*)PAYLOAD_OK);
 	}
 }
 
@@ -318,9 +318,9 @@ void loop(void)
 	uint8_t degree = processFanDegree();
 	setFanDegree(degree);
 
-	if (millis() > _checkPingInterval)
+	if (millis() > _sendOkInterval)
 	{
-		publishData(DevicePing);
+		publishData(DeviceOk);
 	}
 
 	if (!_isStarted)
