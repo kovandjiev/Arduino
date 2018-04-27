@@ -40,8 +40,8 @@ mqttc.username_pw_set('lqnxfvdl', 'p4IT?P;n#3fn')
 mqttc.connect('192.168.1.6', 1883)
 
 # Start subscribe, with QoS level 0
-# mqttc.subscribe('#')
-mqttc.subscribe('flat/bedroom1/#')
+mqttc.subscribe('#')
+# mqttc.subscribe('flat/bedroom1/#')
 # Publish a message
 # mqttc.publish(topic, "my message")
 

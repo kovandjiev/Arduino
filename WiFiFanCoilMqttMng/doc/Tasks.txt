@@ -1,0 +1,6 @@
+1. It the device disconnect from MQTT server or WiFi stays to work for 1 hour before stop (and waiting for connection)
+2. Add broadcast topic (it can be base topic example: flat). If it topic send, the device send all itself data.
+3. If device is working and it doesn't send other data, it sends regularly OK
+4. The bypass open/close temperatures will changed. On 0.2, Off 0.5 degree.
+5. Get value for a topic. Exam: basetopic/bypassstate/get
+6. Adds room ventilation (start/stop or On/Off) functionality. It should stop convector (but is not true stop and it is not reflect On/Off the convector)
