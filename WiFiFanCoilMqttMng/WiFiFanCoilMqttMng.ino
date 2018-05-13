@@ -250,17 +250,7 @@ void setup(void)
 	// Set save configuration callback.
 	wifiManager.setSaveConfigCallback(saveConfigCallback);
 
-	DEBUG_FC_PRINTLN(F("Waiting WiFi up..."));
-	// If the Fan coil (device) starts together with WiFi, need time to initialize WiFi router.
-	// During this time (60 seconds) device trying to connect to WiFi.
-	int i = 0;
-	while (!connectWiFi() && i++ < 12)
-	{
-		// Wait for 5 second before try again.
-		delay(5000);
-	}
-	
-	if (!mangeConnectParamers(&wifiManager, &_settings))
+	if (!mangeConnectAndSettings(&wifiManager, &_settings))
 	{
 		return;
 	}
