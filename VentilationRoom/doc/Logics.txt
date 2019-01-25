@@ -1,0 +1,24 @@
+Base topic. Use it for broadcast. See 1 Callback
+Device name. Example: room_name.
+
+On and close off ventilation. For them switch relay 1 for open and 2 for close. The duration is 40 seconds.
+
+After the device has started first operation is to be off the ventilate.
+
+topic:payload
+
+Callback:
+1 base_topic:null - broadcast command, respond with base_topic/device_name:OK
+2 base_topic/device_name:null - respond with base_topic/device_name:OK
+3 base_topic/device_name:all - send all data per deveice
+4 base_topic/device_name/ventilate/set:[on | off] - open/close the ventilation
+5 base_topic/device_name/windows:null - respond with windows state
+
+Publish:
+ base_topic/device_name:ready - The device has jet stated. This message need to send initialize settings from the remote server. It should publish: data from the server.
+ base_topic/device_name/ventilate:[on | off] - open or close a ventilation
+ base_topic/device_name/windows:[open | close] - open or close all windows
+ base_topic/device_name/window/1:[open | close] - open or close a window 1
+ base_topic/device_name/window/2:[open | close] - open or close a window 2
+ base_topic/device_name/window/3:[open | close] - open or close a window 3
+ base_topic/device_name/window/4:[open | close] - open or close a window 4
