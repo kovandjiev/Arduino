@@ -41,6 +41,7 @@
 #include <MqttTopicHelper.h>
 #include <PubSubClient.h>
 
+
 enum DataType {
 	AllData, DischargeState, Voltage, CutOffVoltage, DischargeTime
 };
@@ -49,20 +50,23 @@ enum DataType {
 const char* SSID = "SweetHome2F";
 const char* SSID_PASSWORD = "kS3#%[h?g;U";
 
+// !! ------------- Change number -------------------- !!
+const char* MQTT_CLIENT_ID = "DischargeClient2";
+const char* DEVICE_TOPIC = "discharger2"; // Current device name
+
 // MQTT server settings. 
 const char* MQTT_SERVER = "192.168.1.6"; // Change it with yours data.
 const int MQTT_PORT = 1883; // Change it with yours data.
 const char* MQTT_USER = "lqnxfvdl"; // Change it with yours data.
 const char* MQTT_PASS = "p4IT?P;n#3fn"; // Change it with yours data.
-const char* MQTT_CLIENT_ID = "Discharge2Client";
 
 // Calibration - Max voltage to show 1024.
 const double MaxVoltage = 14.7;
 const double VoltageCoeficient = MaxVoltage / 1024;
-const double CUTOFF_VOLTAGE = 6.05;
+const double CUTOFF_VOLTAGE_CORRECTION = 0.2;
+const double CUTOFF_VOLTAGE = 6.0;
 
 const char* BASE_TOPIC = "kmp"; // Base topic for all devices in this network. It can use for broadcast devices
-const char* DEVICE_TOPIC = "discharger2"; // Current device name
 const char* DISCHARGE_STATE_TOPIC = "state";
 const char* DISCHARGE_TIME_TOPIC = "time";
 const char* CURRENT_VOLTAGE_TOPIC = "currentvoltage";
@@ -76,10 +80,11 @@ PubSubClient _mqttClient(MQTT_SERVER, MQTT_PORT, _wifiClient);
 // There arrays store last states by relay and optical isolated inputs.
 bool _lastRelayStatus[4] = { false };
 
-const long CHECK_INTERVAL_MS = 500;
-unsigned long _mesureTimeout = 0;
+const long PROCESS_INTERVAL_MS = 500;
+unsigned long _processTimeout = 0;
 const long PUBLISH_CURRENT_INTERVAL_MS = 5000;
 unsigned long _publishCurrentTimeout = 0;
+const long WAIT_BEFORE_PROCESS_INTERVAL_MS = 1500;
 
 // A buffer to send output information.
 char _topicBuff[128];
@@ -209,22 +214,16 @@ void publishTopic(DataType dataType, bool isPrintPublish = true)
 
 void Process()
 {
-	if (millis() > _mesureTimeout)
+	if (millis() > _processTimeout)
 	{
 		int value = analogRead(INT_GROVE_A0);
 		_currentVoltage = roundF(value * VoltageCoeficient, 2);
 
-		if (_currentVoltage <= CUTOFF_VOLTAGE)
+		if (_currentVoltage <= (CUTOFF_VOLTAGE - CUTOFF_VOLTAGE_CORRECTION))
 		{
 			if (_isDischarge)
 			{
-				KMPDinoWiFiESP.SetAllRelaysOff();
-				_stopDischarge = millis();
-				_cutOffVoltage = _currentVoltage;
-
 				_isDischarge = false;
-
-				publishTopic(AllData);
 			}
 		}
 
@@ -233,7 +232,7 @@ void Process()
 		Serial.print(" Voltage: ");
 		Serial.println(_currentVoltage);
 
-		_mesureTimeout = millis() + CHECK_INTERVAL_MS;
+		_processTimeout = millis() + PROCESS_INTERVAL_MS;
 	}
 }
 
@@ -248,8 +247,8 @@ void PublishChangedData()
 	{
 		if(_lastVoltage != _currentVoltage)
 		{
-			publishTopic(Voltage);
 			_lastVoltage = _currentVoltage;
+			publishTopic(Voltage);
 		}
 
 		// Set next time to read data.
@@ -259,7 +258,24 @@ void PublishChangedData()
 	if (_lastDischargeStatus != _isDischarge)
 	{
 		_lastDischargeStatus = _isDischarge;
-		publishTopic(DischargeState);
+
+		if (_isDischarge)
+		{ 
+			_startDischarge = millis();
+			_cutOffVoltage = 0;
+
+			_processTimeout = millis() + WAIT_BEFORE_PROCESS_INTERVAL_MS;
+		}
+		else
+		{
+			_stopDischarge = millis();
+			_cutOffVoltage = _currentVoltage;
+		}
+
+		KMPDinoWiFiESP.SetRelayState(Relay1, _isDischarge);
+		KMPDinoWiFiESP.SetRelayState(Relay2, _isDischarge);
+
+		publishTopic(AllData);
 	}
 }
 
@@ -315,22 +331,10 @@ void callback(char* topics, byte* payload, unsigned int payloadLen)
 			if (isOn || isEqual(payloadStr, W_OFF_S))
 			{
 				printSubscribeTopic(topics, payload, payloadLen);
-				// Set relay new state.
-				if (KMPDinoWiFiESP.GetRelayState(Relay1) != isOn)
-				{
-					KMPDinoWiFiESP.SetRelayState(Relay1, isOn);
-					KMPDinoWiFiESP.SetRelayState(Relay2, isOn);
-				}
 
-				if (isOn)
-				{
-					_startDischarge = millis();
-					_isDischarge = true;
-				}
-				else
-				{
-					_stopDischarge = millis();
-				}
+				_isDischarge = isOn;
+
+				publishTopic(DischargeState);
 			}
 		}
 		return;
@@ -359,9 +363,9 @@ bool ConnectWiFi()
 
 		Serial.print("IP address: ");
 		Serial.println(WiFi.localIP());
-
-		return true;
 	}
+
+	return true;
 }
 
 /**
