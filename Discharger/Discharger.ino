@@ -63,7 +63,7 @@ const char* MQTT_PASS = "p4IT?P;n#3fn"; // Change it with yours data.
 // Calibration - Max voltage to show 1024.
 const double MaxVoltage = 14.7;
 const double VoltageCoeficient = MaxVoltage / 1024;
-const double CUTOFF_VOLTAGE_CORRECTION = 0.2;
+const double CUTOFF_VOLTAGE_CORRECTION = 0.25; // #1 0.2, #2 0.25
 const double CUTOFF_VOLTAGE = 6.0;
 
 const char* BASE_TOPIC = "kmp"; // Base topic for all devices in this network. It can use for broadcast devices
