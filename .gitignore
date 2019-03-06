@@ -250,3 +250,4 @@ _Pvt_Extensions
 .fake/
 *.vcxproj
 *.filters
+Discharger/__arduino_secrets.h
