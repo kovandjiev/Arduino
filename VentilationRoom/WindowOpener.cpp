@@ -4,16 +4,21 @@
 
 #include "WindowOpener.h"
 
-WindowState _windowNewState = Close
+WindowState _windowNewState = CloseWindow;
 bool _windowStateIsChanging = false;
+bool _windowCloseAdditionalTime;
 unsigned long _windowChangeStateInterval;
-int _windowSensorPin;
-callBackPublishData _publishData;
+OptoIn _sensor;
+Relay _openRelay;
+Relay _closeRelay;
+callBackPublishData _publishDataCallBack;
 
-void WindowOpenerClass::init(int windowSensorPin, callBackPublishData publishData)
+void WindowOpenerClass::init(OptoIn sensor, Relay openRelay, Relay closeRelay, callBackPublishData publishData)
 {
-	_windowSensorPin = windowSensorPin;
-	_publishData = publishData;
+	_sensor = sensor;
+	_openRelay = openRelay;
+	_closeRelay = closeRelay;
+	_publishDataCallBack = publishData;
 }
 
 WindowState WindowOpenerClass::getState()
@@ -38,32 +43,63 @@ void WindowOpenerClass::setState(WindowState state, bool forceState)
 		}
 	}
 
-	// Start bypass state changing
 	_windowNewState = state;
 
 	_windowStateIsChanging = true;
-	_windowChangeStateInterval = millis() + BYPASS_CHANGE_STATE_INTERVAL_MS;
 
-	setBypassPin(_bypassNewState, true);
+	// Close window we will process together with sensorIn.
+	if (_windowNewState == CloseWindow)
+	{
+		_windowChangeStateInterval = CLOSE_WINDOW_DURATION_MS + ADDITIONAL_OPERATION_TIME_MS;
+		KMPDinoWiFiESP.SetRelayState(_closeRelay, true);
+		_windowCloseAdditionalTime = false;
+		return;
+	}
+
+	int openDifference = _windowNewState - _windowState;
+
+	// The window needs to be open more.
+	if (openDifference > 0)
+	{
+		_windowChangeStateInterval = OPEN_WINDOW_SINGLE_STEP_DURATION_MS * openDifference;
+		KMPDinoWiFiESP.SetRelayState(_openRelay, true);
+	}
+	else
+	{
+		_windowChangeStateInterval = CLOSE_WINDOW_SINGLE_STEP_DURATION_MS * (openDifference * -1);
+		KMPDinoWiFiESP.SetRelayState(_closeRelay, true);
+	}
+
+	_windowChangeStateInterval += millis();
 }
 
-void WindowOpenerClass::processWinodwState()
+void WindowOpenerClass::processWindowState()
 {
 	if (!_windowStateIsChanging)
 	{
 		return;
 	}
 
-	// End bypass state changing.
-	if (_windowChangeStateInterval < millis())
+	// End window state changing.
+	if (_windowChangeStateInterval > millis())
 	{
-		_windowStateIsChanging = false;
-		_windowState = _windowNewState;
-
-		if (_publishData != NULL)
+		// Waiting for sensor and add sometime
+		if (_windowNewState == CloseWindow && !KMPDinoWiFiESP.GetOptoInState(_sensor) && !_windowCloseAdditionalTime)
 		{
-			_publishData(WindowCurrentState, false);
+			_windowCloseAdditionalTime = true;
+
+			_windowChangeStateInterval = millis() + ADDITIONAL_CLOSE_WINDOW_TIME_MS;
 		}
+		
+		return;
+	}
+
+	_windowStateIsChanging = false;
+	_windowState = _windowNewState;
+
+	if (_publishDataCallBack != NULL)
+	{
+		_publishDataCallBack(WindowCurrentState, false);
 	}
 }
 

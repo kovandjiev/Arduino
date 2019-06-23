@@ -7,36 +7,38 @@
 #include "VentilationHelper.h"
 #include <KMPDinoWiFiESP.h>
 
-#define CLOSE_WINDOW_STATE 0
-#define OPEN_WINDOW_STATE 3
-#define OPEN_WINDOW_DURATION_MS 23  * 1000
-#define OPEN_WINDOW_SINGLE_STEP_DURATION_MS (OPEN_WINDOW_DURATION_MS / OPEN_WINDOW_STATE + 1)
-#define CLOSE_WINDOW_DURATION_MS 25 * 1000
-#define CLOSE_WINDOW_SINGLE_STEP_DURATION_MS (CLOSE_WINDOW_DURATION_MS / OPEN_WINDOW_STATE + 1)
-#define ADDITIONAL_OPERATION_TIME_MS 5 * 1000
-
 enum WindowState
 {
-	Close = 0,
-	QuarterOpen = 1,
+	CloseWindow = 0,
+	OneQuarterOpen = 1,
 	FalfOpen = 2,
-	FullOpen = 3
+	ThreeQuartersOpen = 3,
+	FullOpen = 4
 };
+
+#define CLOSE_WINDOW_STATE 0
+#define MAX_WINDOW_STATE FullOpen
+#define OPEN_WINDOW_DURATION_MS 23  * 1000
+#define OPEN_WINDOW_SINGLE_STEP_DURATION_MS (OPEN_WINDOW_DURATION_MS / MAX_WINDOW_STATE)
+#define CLOSE_WINDOW_DURATION_MS 25 * 1000
+#define CLOSE_WINDOW_SINGLE_STEP_DURATION_MS (CLOSE_WINDOW_DURATION_MS / MAX_WINDOW_STATE)
+#define ADDITIONAL_OPERATION_TIME_MS (CLOSE_WINDOW_DURATION_MS / 2)
+#define ADDITIONAL_CLOSE_WINDOW_TIME_MS CLOSE_WINDOW_SINGLE_STEP_DURATION_MS
 
 typedef void(* callBackPublishData) (DeviceData deviceData, bool sendCurrent);
 
 class WindowOpenerClass : private KMPDinoWiFiESPClass
 {
 private:
-	WindowState _windowState = Close;
+	WindowState _windowState = CloseWindow;
 public:
-	void init(int windowSensorPin, callBackPublishData publishData);
+	void init(OptoIn sensor, Relay openRelay, Relay closeRelay, callBackPublishData publishData);
 
 	WindowState getState();
 
 	void setState(WindowState state, bool forceState = false);
 
-	void processWinodwState();
+	void processWindowState();
 };
 
 extern WindowOpenerClass WindowOpener;

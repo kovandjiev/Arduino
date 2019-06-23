@@ -15,6 +15,7 @@
 
 #include "VentilationHelper.h"
 #include "WindowOpener.h"
+#include "MqttTopicHelper.h"
 #include <KMPDinoWiFiESP.h>       // Our library. https://www.kmpelectronics.eu/en-us/examples/prodinowifi-esp/howtoinstall.aspx
 #include <KMPCommon.h>
 
@@ -34,6 +35,7 @@ char _payloadBuff[32];
 
 bool _isConnected = false;
 bool _isStarted = false;
+unsigned long _windowCloseIfNotConnectedInterval;
 
 void publishData(DeviceData deviceData, bool sendCurrent = false)
 {
@@ -195,17 +197,16 @@ void callback(char* topic, byte* payload, unsigned int length) {
 */
 void setup(void)
 {
-	initializeSensorData();
-
 	// You can open the Arduino IDE Serial Monitor window to see what the code is doing
 	DEBUG_FC.begin(115200);
 	// Init KMP ProDino WiFi-ESP board.
 	KMPDinoWiFiESP.init();
 	KMPDinoWiFiESP.SetAllRelaysOff();
 	// Init bypass.
-	FanCoilBypass.init(&publishData);
+	WindowOpener.init(OptoIn1, Relay1, Relay2, &publishData);
 
-	DEBUG_FC_PRINTLN(F("KMP fan coil management with Mqtt.\r\n"));
+	DEBUG_FC_PRINTLN(F("KMP Ventilation room Mqtt application starting."));
+	DEBUG_FC_PRINTLN(F(""));
 
 	//WiFiManager
 	//Local initialization. Once it's business is done, there is no need to keep it around.
@@ -222,16 +223,19 @@ void setup(void)
 	// Set save configuration callback.
 	wifiManager.setSaveConfigCallback(saveConfigCallback);
 
-	if (!mangeConnectAndSettings(&wifiManager, &_settings))
+	if (!manageConnectAndSettings(&wifiManager, &_settings))
 	{
 		return;
 	}
 
+	// Initialize MQTT helper
+	MqttTopicHelper.init(_settings.BaseTopic, _settings.DeviceTopic, &Serial);
+
 	// Initialize MQTT.
 	_mqttClient.setClient(_wifiClient);
 
-	// Switch off bypass.
-	FanCoilBypass.setBypassState(Off, true);
+	// Close window.
+	WindowOpener.setState(CloseWindow, true);
 }
 
 /**
@@ -241,298 +245,32 @@ void setup(void)
 */
 void loop(void)
 {
+	WindowOpener.processWindowState();
+
 	// For a normal work on device, need it be connected to WiFi and MQTT server.
 	_isConnected = connectWiFi() && connectMqtt();
 
 	if (!_isConnected)
 	{
-		// Turn off the device
-		setDeviceState(Off);
-		uint8_t degree = processFanDegree();
-		setFanDegree(degree);
-		FanCoilBypass.processByPassState();
+		if (_windowCloseIfNotConnectedInterval == 0)
+		{
+			_windowCloseIfNotConnectedInterval = millis() + WAIT_FOR_CONNECTION_TIMEOUT_MS;
+		}
+
+		if (_windowCloseIfNotConnectedInterval > millis())
+		{
+			WindowOpener.setState(CloseWindow, true);
+		}
 
 		return;
 	}
 
 	_mqttClient.loop();
 
-	bool isDHTExists = getTemperatureAndHumidity();
-	processDHTStatus(isDHTExists);
-
-	bool isDS18B20Exists = getPipesTemperature();
-	processDS18B20Status(isDS18B20Exists);
-
-	if (!_isStarted)
-	{
-		setArrayValues(&TemperatureData);
-		setArrayValues(&HumidityData);
-		setArrayValues(&InletData);
-	}
-
-	processData(&TemperatureData);
-	processData(&HumidityData);
-	processData(&InletData);
-
-	uint8_t degree = processFanDegree();
-	setFanDegree(degree);
-
-	if (millis() > _sendOkInterval)
-	{
-		publishData(DeviceOk);
-	}
-
 	if (!_isStarted)
 	{
 		_isStarted = true;
 		publishData(DeviceIsReady);
-	}
-
-	FanCoilBypass.processByPassState();
-}
-
-bool getTemperatureAndHumidity()
-{
-	bool result = _dhtSensor.read();
-	if (result)
-	{
-		TemperatureData.Current = _dhtSensor.readTemperature();
-		HumidityData.Current = _dhtSensor.readHumidity();
-	}
-
-	TemperatureData.IsExists = result;
-	HumidityData.IsExists = result;
-
-	return result;
-}
-
-bool getPipesTemperature()
-{
-	if (!InletData.IsExists)
-	{
-		findPipeSensors();
-	};
-
-	if (InletData.IsExists)
-	{
-		// Send the command to get temperatures.
-		_oneWireSensors.requestTemperatures();
-		float temp = _oneWireSensors.getTempC(InletData.Address);
-		if (temp != DEVICE_DISCONNECTED_C)
-		{
-			InletData.Current = _oneWireSensors.getTempC(InletData.Address);
-		}
-		else
-		{
-			InletData.IsExists = false;
-		}
-	}
-
-	return InletData.IsExists;
-}
-
-/**
-* @brief
-*/
-bool setDeviceState(DeviceState state)
-{
-	DeviceState shouldBe = state;
-
-	if (!_isConnected || !_isDHTExists)
-	{
-		shouldBe = Off;
-	}
-
-	_deviceState = shouldBe;
-	publishData(CurrentDeviceState);
-
-	return _deviceState == state;
-}
-
-void processDHTStatus(bool isExists)
-{
-	bool sendData = false;
-
-	if (isExists)
-	{
-		sendData = !_isDHTExists;
-		_isDHTExists = true;
-		if (_deviceState != _lastDeviceState)
-		{
-			setDeviceState(_lastDeviceState);
-		}
-	}
-	else
-	{
-		if (_isDHTExists)
-		{
-			_isDHTExists = false;
-			_lastDeviceState = _deviceState;
-			// TODO: Maybe send an error
-			sendData = true;
-			// Turn off a device
-			setDeviceState(Off);
-		}
-	}
-
-	if (sendData)
-	{
-		publishData(DeviceData(Temperature | Humidity));
-	}
-}
-
-void processDS18B20Status(bool isExists)
-{
-	bool sendData = false;
-
-	if (isExists)
-	{
-		sendData = !_isDS18b20Exists;
-		_isDS18b20Exists = true;
-
-	}
-	else
-	{
-		if (_isDS18b20Exists)
-		{
-			// TODO: Maybe send warning
-			_isDS18b20Exists = false;
-			sendData = true;
-		}
-	}
-
-	if (sendData)
-	{
-		publishData(InletPipe);
-	}
-}
-
-void processData(SensorData* data)
-{
-	if (millis() > data->CheckInterval)
-	{
-		if (data->CurrentCollectPos >= data->DataCollectionLen)
-		{
-			data->CurrentCollectPos = 0;
-		}
-
-		if (data->IsExists)
-		{
-			data->DataCollection[data->CurrentCollectPos++] = roundF(data->Current, data->Precision);
-		}
-
-		// Process collected data
-		float result = calcAverage(data->DataCollection, data->DataCollectionLen, data->Precision);
-
-		if (data->Average != result)
-		{
-			data->Average = result;
-			publishData(data->DataType);
-		}
-
-		// Set next time to read data.
-		data->CheckInterval = millis() + data->CheckDataIntervalMS;
-	}
-}
-
-uint8_t processFanDegree()
-{
-	uint8_t degree = 0;
-
-	if (_deviceState == Off)
-	{
-		// Urgent antifreeze bypass action.
-		if (TemperatureData.Average < BYPASS_ON_MIN_ANTI_FREEZE_TEMPERTURE)
-		{
-			FanCoilBypass.setBypassState(On);
-		}
-		
-		// Release antifreeze bypass action.
-		if (TemperatureData.Average > BYPASS_OFF_MIN_ANTI_FREEZE_TEMPERTURE)
-		{
-			FanCoilBypass.setBypassState(Off);
-		}
-
-		return degree;
-	}
-
-	float diffTemp = _mode == Cold ? TemperatureData.Average - _desiredTemperature /* Cold */ : _desiredTemperature - TemperatureData.Average /* Heat */;
-
-	// Bypass the fan coil - Off.
-	if (diffTemp - BYPASS_OFF_TEMPERTURE_DIFFERENCE <= 0.0)
-	{
-		FanCoilBypass.setBypassState(Off);
-	}
-
-	// Release bypass - On.
-	if (diffTemp - BYPASS_ON_TEMPERTURE_DIFFERENCE >= 0.0)
-	{
-		FanCoilBypass.setBypassState(On);
-	}
-
-	float pipeDiffTemp;
-
-	if (InletData.IsExists)
-	{
-		pipeDiffTemp = _mode == Cold ? TemperatureData.Average - InletData.Average /* Cold */ : InletData.Average - TemperatureData.Average /* Heat */;
-	}
-
-	// If inlet sensor doesn't exist or difference between inlet pipe temperature and ambient temperature > 5 degree get fan degree.
-	if (!InletData.IsExists || pipeDiffTemp >= 5)
-	{
-		int i = FAN_SWITCH_LEVEL_LEN;
-		while (i > 0)
-		{
-			if (diffTemp > FAN_SWITCH_LEVEL[--i])
-			{
-				degree = i + 1;
-				break;
-			}
-		}
-	}
-
-	return degree;
-}
-
-/**
-* @brief: Setting the degree of fun.
-* The degrees: 0 - stopped, 1 - low fan speed, 2 - medium, 3 - high
-**/
-void setFanDegree(uint8_t degree)
-{
-	if (degree == _fanDegree)
-	{
-		return;
-	}
-
-	// Switch last fan degree relay off.
-	if (_fanDegree != 0)
-	{
-		KMPDinoWiFiESP.SetRelayState(_fanDegree - 1, false);
-	}
-
-	delay(100);
-
-	if (degree > 0)
-	{
-		KMPDinoWiFiESP.SetRelayState(degree - 1, true);
-	}
-
-	_fanDegree = degree;
-
-	publishData(FanDegree);
-}
-
-void setDesiredTemperature(float temp)
-{
-	if (!std::isnan(temp))
-	{
-		float roundTemp = roundF(temp, TEMPERATURE_PRECISION);
-		if (roundTemp >= MIN_DESIRED_TEMPERATURE && roundTemp <= MAX_DESIRED_TEMPERATURE)
-		{
-			_desiredTemperature = roundTemp;
-		}
-		publishData(DesiredTemp);
 	}
 }
 
@@ -604,65 +342,9 @@ bool connectMqtt()
 	return _mqttClient.connected();
 }
 
-char* valueToStr(SensorData* sensorData, bool sendCurrent)
-{
-	if (!sensorData->IsExists)
-	{
-		return (char*)NOT_AVILABLE;
-	}
-
-	float val = sendCurrent ? sensorData->Current : sensorData->Average;
-
-	FloatToChars(val, sensorData->Precision, _payloadBuff);
-	return _payloadBuff;
-}
-
-void findPipeSensors()
-{
-	_oneWireSensors.begin();
-	_oneWireSensors.setResolution(ONEWIRE_TEMPERATURE_PRECISION);
-
-	uint8_t pipeSensorCount = _oneWireSensors.getDeviceCount();
-	if (pipeSensorCount > 0)
-	{
-		DeviceAddress deviceAddress;
-
-		bool isExists = _oneWireSensors.getAddress(deviceAddress, 0);
-		InletData.IsExists = isExists;
-
-		if (isExists)
-		{
-			memcpy(InletData.Address, deviceAddress, 8);
-		}
-	}
-}
-
 void publishAllData()
 {
 	DeviceData deviceData = (DeviceData)
-		(Temperature | DesiredTemp | FanDegree | CurrentMode | CurrentDeviceState | Humidity | InletPipe | BypassState);
+		(CurrentDeviceState | WindowCurrentState);
 	publishData(deviceData, false);
-}
-
-void setDeviceMode(char* payload, unsigned int length)
-{
-	bool isProcessed = false;
-
-	if (isEqual(payload, PAYLOAD_HEAT, length))
-	{
-		_mode = Heat;
-		isProcessed = true;
-	}
-
-	if (isEqual(payload, PAYLOAD_COLD, length))
-	{
-		_mode = Cold;
-		isProcessed = true;
-	}
-
-	if (isProcessed)
-	{
-		//SaveConfiguration();
-		publishData(CurrentMode);
-	}
 }

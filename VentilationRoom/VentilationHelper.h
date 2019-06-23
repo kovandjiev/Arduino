@@ -30,10 +30,10 @@
 #define MQTT_USER_LEN 16
 #define MQTT_PASS_LEN 16
 #define BASE_TOPIC_LEN 32
-#define INLET_SENSOR_CRC_LEN 16
+#define DEVICE_TOPIC_LEN 32
 
 // Waiting for connection before switch off device.
-#define WAIT_FOR_CONNECTION_TIMEOUT_MS 360000 // 1 hour
+#define WAIT_FOR_CONNECTION_TIMEOUT_MS 15 * 60 * 1000 // 15 minutes
 
 const char MQTT_SERVER_KEY[] = "mqttServer";
 const char MQTT_PORT_KEY[] = "mqttPort";
@@ -41,7 +41,7 @@ const char MQTT_CLIENT_ID_KEY[] = "mqttClientId";
 const char MQTT_USER_KEY[] = "mqttUser";
 const char MQTT_PASS_KEY[] = "mqttPass";
 const char BASE_TOPIC_KEY[] = "baseTopic";
-const char INLET_SENSOR_KEY[] = "inletSensorCRC";
+const char DEVICE_TOPIC_KEY[] = "deviceTopic";
 const char MODE_KEY[] = "mode";
 const char CONFIG_FILE_NAME[] = "/config.json";
 
@@ -82,7 +82,8 @@ struct DeviceSettings
 	char MqttClientId[MQTT_CLIENT_ID_LEN] = "ESP8266Client";
 	char MqttUser[MQTT_USER_LEN];
 	char MqttPass[MQTT_PASS_LEN];
-	char BaseTopic[BASE_TOPIC_LEN] = "flat/bedroom1";
+	char BaseTopic[BASE_TOPIC_LEN] = "flat";
+	char DeviceTopic[DEVICE_TOPIC_LEN] = "bedroom1";
 };
 
 #ifdef WIFIFCMM_DEBUG
@@ -91,10 +92,8 @@ void printTopicAndPayload(const char* operationName, const char* topic, char* pa
 
 bool connectWiFi();
 
-float calcAverage(float* data, uint8 dataLength, uint8 precision);
-
 void ReadConfiguration(DeviceSettings* settings);
-bool mangeConnectAndSettings(WiFiManager* wifiManager, DeviceSettings* settings);
+bool manageConnectAndSettings(WiFiManager* wifiManager, DeviceSettings* settings);
 void SaveConfiguration(DeviceSettings* settings);
 void saveConfigCallback();
 

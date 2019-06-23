@@ -31,22 +31,6 @@ bool connectWiFi()
 	return true;
 }
 
-float calcAverage(float * data, uint8 dataLength, uint8 precision)
-{
-	// Get average value.
-	double temp = 0.0;
-	for (uint i = 0; i < dataLength; i++)
-	{
-		temp += data[i];
-	}
-
-	temp /= dataLength;
-
-	float result = roundF(temp, precision);
-
-	return result;
-}
-
 /**
 * @brief Print debug information about topic and payload.
 * @operationName Operation which send this data.
@@ -123,6 +107,7 @@ void ReadConfiguration(DeviceSettings* settings)
 					copyJsonValue(settings->MqttUser, json[MQTT_USER_KEY]);
 					copyJsonValue(settings->MqttPass, json[MQTT_PASS_KEY]);
 					copyJsonValue(settings->BaseTopic, json[BASE_TOPIC_KEY]);
+					copyJsonValue(settings->DeviceTopic, json[DEVICE_TOPIC_LEN]);
 					// After start device we should set this settings.
 					//_mode = (Mode)atoi(json[MODE_KEY]);
 					//_deviceState = atoi(json[TOPIC_DEVICE_STATE]) == 1 ? On : Off;
@@ -142,7 +127,7 @@ void ReadConfiguration(DeviceSettings* settings)
 *
 * @return bool if successful connected - true else false.
 */
-bool mangeConnectAndSettings(WiFiManager* wifiManager, DeviceSettings* settings)
+bool manageConnectAndSettings(WiFiManager* wifiManager, DeviceSettings* settings)
 {
 	//read configuration from FS json
 	DEBUG_FC_PRINTLN("Mounting FS...");
@@ -157,7 +142,8 @@ bool mangeConnectAndSettings(WiFiManager* wifiManager, DeviceSettings* settings)
 	WiFiManagerParameter customClientName("clientName", "Client name", settings->MqttClientId, MQTT_CLIENT_ID_LEN);
 	WiFiManagerParameter customMqttUser("user", "MQTT user", settings->MqttUser, MQTT_USER_LEN);
 	WiFiManagerParameter customMqttPass("password", "MQTT pass", settings->MqttPass, MQTT_PASS_LEN);
-	WiFiManagerParameter customBaseTopic("baseTopic", "Main topic", settings->BaseTopic, BASE_TOPIC_LEN);
+	WiFiManagerParameter customBaseTopic("baseTopic", "Base topic", settings->BaseTopic, BASE_TOPIC_LEN);
+	WiFiManagerParameter customDevicTopic("deviceTopic", "Device topic", settings->DeviceTopic, DEVICE_TOPIC_LEN);
 
 	// add all your parameters here
 	wifiManager->addParameter(&customMqttServer);
@@ -166,6 +152,7 @@ bool mangeConnectAndSettings(WiFiManager* wifiManager, DeviceSettings* settings)
 	wifiManager->addParameter(&customMqttUser);
 	wifiManager->addParameter(&customMqttPass);
 	wifiManager->addParameter(&customBaseTopic);
+	wifiManager->addParameter(&customDevicTopic);
 
 	DEBUG_FC_PRINTLN(F("Waiting WiFi up..."));
 
@@ -194,6 +181,7 @@ bool mangeConnectAndSettings(WiFiManager* wifiManager, DeviceSettings* settings)
 		strcpy(settings->MqttUser, customMqttUser.getValue());
 		strcpy(settings->MqttPass, customMqttPass.getValue());
 		strcpy(settings->BaseTopic, customBaseTopic.getValue());
+		strcpy(settings->DeviceTopic, customDevicTopic.getValue());
 
 		SaveConfiguration(settings);
 	}
@@ -214,6 +202,7 @@ void SaveConfiguration(DeviceSettings* settings)
 	json[MQTT_USER_KEY] = settings->MqttUser;
 	json[MQTT_PASS_KEY] = settings->MqttPass;
 	json[BASE_TOPIC_KEY] = settings->BaseTopic;
+	json[DEVICE_TOPIC_KEY] = settings->DeviceTopic;
 
 	// We shouldn't save this settings.
 	//json[MODE_KEY] = (int)_mode;
@@ -245,40 +234,4 @@ void saveConfigCallback()
 {
 	DEBUG_FC_PRINTLN("Should save configuration");
 	_shouldSaveConfig = true;
-}
-
-void setArrayValues(SensorData * sensor)
-{
-	if (!sensor->IsExists)
-	{
-		return;
-	}
-	
-	for (size_t i = 0; i < sensor->DataCollectionLen; i++)
-	{
-		sensor->DataCollection[i] = sensor->Current;
-	}
-
-	sensor->Average = sensor->Current;
-}
-
-void initializeSensorData()
-{
-	TemperatureData.DataCollection = TempCollection;
-	TemperatureData.DataCollectionLen = TEMPERATURE_ARRAY_LEN;
-	TemperatureData.Precision = TEMPERATURE_PRECISION;
-	TemperatureData.CheckDataIntervalMS = CHECK_TEMP_INTERVAL_MS;
-	TemperatureData.DataType = Temperature;
-
-	HumidityData.DataCollection = HumidityCollection;
-	HumidityData.DataCollectionLen = HUMIDITY_ARRAY_LEN;
-	HumidityData.Precision = HUMIDITY_PRECISION;
-	HumidityData.CheckDataIntervalMS = CHECK_HUMIDITY_INTERVAL_MS;
-	HumidityData.DataType = Humidity;
-
-	InletData.DataCollection = InletCollection;
-	InletData.DataCollectionLen = INLET_ARRAY_LEN;
-	InletData.Precision = INLET_PRECISION;
-	InletData.CheckDataIntervalMS = CHECK_INLET_INTERVAL_MS;
-	InletData.DataType = InletPipe;
 }
