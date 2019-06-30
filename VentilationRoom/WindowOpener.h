@@ -7,7 +7,7 @@
 #include "VentilationHelper.h"
 #include <KMPDinoWiFiESP.h>
 
-enum WindowState
+enum WindowStateType
 {
 	CloseWindow = 0,
 	OneQuarterOpen = 1,
@@ -25,18 +25,18 @@ enum WindowState
 #define ADDITIONAL_OPERATION_TIME_MS (CLOSE_WINDOW_DURATION_MS / 2)
 #define ADDITIONAL_CLOSE_WINDOW_TIME_MS CLOSE_WINDOW_SINGLE_STEP_DURATION_MS
 
-typedef void(* callBackPublishData) (DeviceData deviceData, bool sendCurrent);
+typedef void(* callBackPublishData) (DeviceData deviceData, int num, bool isPrintPublish);
 
 class WindowOpenerClass : private KMPDinoWiFiESPClass
 {
 private:
-	WindowState _windowState = CloseWindow;
+	void publishState();
 public:
 	void init(OptoIn sensor, Relay openRelay, Relay closeRelay, callBackPublishData publishData);
 
-	WindowState getState();
+	WindowStateType getState();
 
-	void setState(WindowState state, bool forceState = false);
+	void setState(WindowStateType state, bool forceState = false);
 
 	void processWindowState();
 };
@@ -44,4 +44,3 @@ public:
 extern WindowOpenerClass WindowOpener;
 
 #endif
-

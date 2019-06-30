@@ -31,30 +31,6 @@ bool connectWiFi()
 	return true;
 }
 
-/**
-* @brief Print debug information about topic and payload.
-* @operationName Operation which send this data.
-* @param topic The topic name.
-* @param payload The payload data.
-* @param length A payload length.
-*
-* @return void
-*/
-#ifdef WIFIFCMM_DEBUG
-void printTopicAndPayload(const char* operationName, const char* topic, char* payload, unsigned int length)
-{
-	DEBUG_FC_PRINT(operationName);
-	DEBUG_FC_PRINT(" topic [");
-	DEBUG_FC_PRINT(topic);
-	DEBUG_FC_PRINT("] payload [");
-	for (uint i = 0; i < length; i++)
-	{
-		DEBUG_FC_PRINT((char)payload[i]);
-	}
-	DEBUG_FC_PRINTLN("]");
-}
-#endif
-
 void copyJsonValue(char* s, const char* jsonValue)
 {
 	if (jsonValue == NULL)
@@ -92,13 +68,16 @@ void ReadConfiguration(DeviceSettings* settings)
 				std::unique_ptr<char[]> buf(new char[size]);
 
 				configFile.readBytes(buf.get(), size);
-				DynamicJsonBuffer jsonBuffer;
-				JsonObject& json = jsonBuffer.parseObject(buf.get());
-#ifdef WIFIFCMM_DEBUG
-				json.printTo(DEBUG_FC);
-#endif
-				if (json.success())
+				DynamicJsonDocument json(1024);
+
+				DeserializationError error = deserializeJson(json, buf.get());
+
+				if (!error)
 				{
+#ifdef WIFIFCMM_DEBUG
+					serializeJsonPretty(json, DEBUG_FC);
+#endif
+
 					DEBUG_FC_PRINTLN("\nJson is parsed");
 
 					copyJsonValue(settings->MqttServer, json[MQTT_SERVER_KEY]);
@@ -107,10 +86,7 @@ void ReadConfiguration(DeviceSettings* settings)
 					copyJsonValue(settings->MqttUser, json[MQTT_USER_KEY]);
 					copyJsonValue(settings->MqttPass, json[MQTT_PASS_KEY]);
 					copyJsonValue(settings->BaseTopic, json[BASE_TOPIC_KEY]);
-					copyJsonValue(settings->DeviceTopic, json[DEVICE_TOPIC_LEN]);
-					// After start device we should set this settings.
-					//_mode = (Mode)atoi(json[MODE_KEY]);
-					//_deviceState = atoi(json[TOPIC_DEVICE_STATE]) == 1 ? On : Off;
+					copyJsonValue(settings->DeviceTopic, json[DEVICE_TOPIC_KEY]);
 				}
 				else
 				{
@@ -130,7 +106,7 @@ void ReadConfiguration(DeviceSettings* settings)
 bool manageConnectAndSettings(WiFiManager* wifiManager, DeviceSettings* settings)
 {
 	//read configuration from FS json
-	DEBUG_FC_PRINTLN("Mounting FS...");
+	DEBUG_FC_PRINTLN(F("Mounting FS..."));
 
 	ReadConfiguration(settings);
 
@@ -158,7 +134,7 @@ bool manageConnectAndSettings(WiFiManager* wifiManager, DeviceSettings* settings
 
 	// If the Fan coil (device) starts together with WiFi, need time to initialize WiFi router.
 	// During this time (60 seconds) device trying to connect to WiFi.
-	wifiManager->setTimeout(60);
+	//wifiManager->setTimeout(60);
 
 	// fetches ssid and pass from eeprom and tries to connect
 	// if it does not connect it starts an access point with the specified name
@@ -193,8 +169,7 @@ void SaveConfiguration(DeviceSettings* settings)
 {
 	DEBUG_FC_PRINTLN(F("Saving configuration..."));
 
-	DynamicJsonBuffer jsonBuffer;
-	JsonObject& json = jsonBuffer.createObject();
+	DynamicJsonDocument json(1024);
 
 	json[MQTT_SERVER_KEY] = settings->MqttServer;
 	json[MQTT_PORT_KEY] = settings->MqttPort;
@@ -204,25 +179,21 @@ void SaveConfiguration(DeviceSettings* settings)
 	json[BASE_TOPIC_KEY] = settings->BaseTopic;
 	json[DEVICE_TOPIC_KEY] = settings->DeviceTopic;
 
-	// We shouldn't save this settings.
-	//json[MODE_KEY] = (int)_mode;
-	//json[TOPIC_DEVICE_STATE] = _deviceState == On ? 1 : 0;
-
 	File configFile = SPIFFS.open(CONFIG_FILE_NAME, "w");
-	if (!configFile) {
-		DEBUG_FC_PRINTLN(F("Failed to open a configuration file for writing."));
-	}
-	else
+	if (!configFile) 
 	{
-		DEBUG_FC_PRINTLN(F("Configuration is saved."));
+		DEBUG_FC_PRINTLN(F("Failed to open a configuration file for writing."));
+		return;
 	}
 
 #ifdef WIFIFCMM_DEBUG
-	json.prettyPrintTo(DEBUG_FC);
+	serializeJson(json, DEBUG_FC);
 #endif
 
-	json.printTo(configFile);
+	serializeJson(json, configFile);
 	configFile.close();
+
+	DEBUG_FC_PRINTLN(F("Configuration is saved."));
 }
 
 /**

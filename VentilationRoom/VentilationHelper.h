@@ -42,37 +42,27 @@ const char MQTT_USER_KEY[] = "mqttUser";
 const char MQTT_PASS_KEY[] = "mqttPass";
 const char BASE_TOPIC_KEY[] = "baseTopic";
 const char DEVICE_TOPIC_KEY[] = "deviceTopic";
-const char MODE_KEY[] = "mode";
 const char CONFIG_FILE_NAME[] = "/config.json";
 
-const char TOPIC_SEPARATOR[] = "/";
-const char TOPIC_HUMIDITY[] = "humidity";
-const char TOPIC_DESIRED_TEMPERATURE[] = "desiredtemp";
-const char TOPIC_BYPASS_STATE[] = "bypassstate";
-const char TOPIC_TEMPERATURE[] = "temperature";
 const char TOPIC_SET[] = "set";
-const char TOPIC_MODE[] = "mode";
-const char TOPIC_DEVICE_STATE[] = "state";
-const char TOPIC_FAN_DEGREE[] = "fandegree";
-const char TOPIC_INLET_TEMPERATURE[] = "inlettemp";
-const char PAYLOAD_HEAT[] = "heat";
-const char PAYLOAD_COLD[] = "cold";
-const char PAYLOAD_ON[] = "on";
-const char PAYLOAD_OFF[] = "off";
 const char PAYLOAD_READY[] = "ready";
-const char PAYLOAD_OK[] = "ok";
+const char PAYLOAD_OPEN[] = "open";
+const char PAYLOAD_CLOSE[] = "close";
+const char PAYLOAD_ALL[] = "all";
 
-const char EVERY_ONE_LEVEL_TOPIC[] = "+";
-const char NOT_AVILABLE[] = "N/A";
-
-const char MUST_BE_ONE[] = "Must be one";
+const char WINDOW_TOPIC[] = "window";
+const char GATES_TOPIC[] = "gates";
+const char GATE_TOPIC[] = "gate";
 
 enum DeviceData
 {
-	CurrentDeviceState = 1,
-	DeviceIsReady = 2,
-	DeviceOk = 4,
-	WindowCurrentState = 8
+	AllData,
+	BroadcastDevice,
+	DeviceIsReady,
+	DeviceOk,
+	WindowState,
+	GateState,
+	AllGatesState
 };
 
 struct DeviceSettings
@@ -85,10 +75,6 @@ struct DeviceSettings
 	char BaseTopic[BASE_TOPIC_LEN] = "flat";
 	char DeviceTopic[DEVICE_TOPIC_LEN] = "bedroom1";
 };
-
-#ifdef WIFIFCMM_DEBUG
-void printTopicAndPayload(const char* operationName, const char* topic, char* payload, unsigned int length);
-#endif
 
 bool connectWiFi();
 

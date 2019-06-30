@@ -23,12 +23,13 @@ Callback:
  base_topic/device_name/window:null - respond with current window state
  base_topic/device_name/window/set:[0 (Closed), 1, 2, 3, 4 (Full opened)] - open/close a window
  base_topic/device_name/gates:null - respond with all gates state
+ base_topic/device_name/gate:[1..4] - respond with every gate state
 
 Publish:
  base_topic/device_name:ready - The device has jet stated. This message need to send initialize settings from the remote server. It should publish: data from the server.
- base_topic/device_name/ventilate:[on | off] - open or close ventilation gates
+ //base_topic/device_name/ventilate:[on | off] - open or close ventilation gates
  base_topic/device_name/window:[0 (Closed), 1,  2, 3, 4 (Full opened)] - open/close a window
- base_topic/device_name/gate/1:[open | close] - open or close a window/door 1
+ base_topic/device_name/gate/1:[open | close] - open or close a window/door 1 - It is default gate for window.
  base_topic/device_name/gate/2:[open | close] - open or close a window/door 2
  base_topic/device_name/gate/3:[open | close] - open or close a window/door 3
  base_topic/device_name/gate/4:[open | close] - open or close a window/door 4

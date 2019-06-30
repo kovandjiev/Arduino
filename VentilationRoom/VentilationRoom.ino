@@ -34,162 +34,175 @@ char _topicBuff[128];
 char _payloadBuff[32];
 
 bool _isConnected = false;
-bool _isStarted = false;
 unsigned long _windowCloseIfNotConnectedInterval;
 
-void publishData(DeviceData deviceData, bool sendCurrent = false)
+/**
+* @brief This method publishes all data per device.
+* @dataType Type of data which will be publish.
+* @num device number, if need for publish this topic.
+* @isPrintPublish is print Publish.
+*
+* @return void
+*/
+void publishTopic(DeviceData deviceData, int num = 0, bool isPrintPublish = true)
 {
-	if (!_isConnected || !_isStarted)
+	if (!_isConnected)
 	{
 		return;
 	}
-/*
-	if (CHECK_ENUM(deviceData, Temperature))
-	{
-		strConcatenate(_topicBuff, 3, _settings.BaseTopic, TOPIC_SEPARATOR, TOPIC_TEMPERATURE);
 
-		mqttPublish(_topicBuff, valueToStr(&TemperatureData, sendCurrent));
+	if (isPrintPublish)
+	{
+		DEBUG_FC_PRINTLN(F("Publish"));
 	}
 
-	if (CHECK_ENUM(deviceData, Humidity))
-	{
-		strConcatenate(_topicBuff, 3, _settings.BaseTopic, TOPIC_SEPARATOR, TOPIC_HUMIDITY);
+	const char * topic = NULL;
+	const char * payload = NULL;
+	char numBuff[8];
 
-		mqttPublish(_topicBuff, valueToStr(&HumidityData, sendCurrent));
+	switch (deviceData)
+	{
+	case AllData:
+		// base_topic/device_name:NULL
+		publishTopic(DeviceIsReady, 0, false);
+		publishTopic(WindowState, 0, false);
+		publishTopic(AllGatesState, 0, false);
+		break;
+	case BroadcastDevice:
+		// base_topic:NULL
+		topic = MqttTopicHelper.getMainTopic();
+		payload = W_OK;
+		break;
+	case WindowState:
+		// base_topic/device_name/window:NULL
+		MqttTopicHelper.buildTopicWithMT(_topicBuff, 1, WINDOW_TOPIC);
+		topic = _topicBuff;
+		IntToChars(WindowOpener.getState(), numBuff);
+		payload = numBuff;
+		break;
+	case GateState:
+		IntToChars(num + 1, numBuff);
+		// base_topic/device_name/gate/1:[open | close]
+		MqttTopicHelper.buildTopicWithMT(_topicBuff, 2, GATE_TOPIC, numBuff);
+		topic = _topicBuff;
+		payload = KMPDinoWiFiESP.GetOptoInState(num) ? PAYLOAD_OPEN : PAYLOAD_CLOSE;
+		break;
+	case AllGatesState:
+		for (size_t i = 0; i < OPTOIN_COUNT; i++)
+			publishTopic(GateState, i, false);
+		break;
+	case DeviceIsReady:
+		topic = MqttTopicHelper.getIsReadyTopic();
+		payload = PAYLOAD_READY;
+		break;
+	default:
+		break;
 	}
 
-	if (CHECK_ENUM(deviceData, InletPipe))
+	if (topic != NULL)
 	{
-		strConcatenate(_topicBuff, 3, _settings.BaseTopic, TOPIC_SEPARATOR, TOPIC_INLET_TEMPERATURE);
-
-		mqttPublish(_topicBuff, valueToStr(&InletData, sendCurrent));
-	}
-
-	if (CHECK_ENUM(deviceData, FanDegree))
-	{
-		strConcatenate(_topicBuff, 3, _settings.BaseTopic, TOPIC_SEPARATOR, TOPIC_FAN_DEGREE);
-		IntToChars(_fanDegree, _payloadBuff);
-
-		mqttPublish(_topicBuff, _payloadBuff);
-	}
-
-	if (CHECK_ENUM(deviceData, DesiredTemp))
-	{
-		strConcatenate(_topicBuff, 3, _settings.BaseTopic, TOPIC_SEPARATOR, TOPIC_DESIRED_TEMPERATURE);
-		FloatToChars(_desiredTemperature, TEMPERATURE_PRECISION, _payloadBuff);
-
-		mqttPublish(_topicBuff, _payloadBuff);
-	}
-
-	if (CHECK_ENUM(deviceData, CurrentMode))
-	{
-		strConcatenate(_topicBuff, 3, _settings.BaseTopic, TOPIC_SEPARATOR, TOPIC_MODE);
-
-		const char * mode = _mode == Cold ? PAYLOAD_COLD : PAYLOAD_HEAT;
-
-		mqttPublish(_topicBuff, (char*)mode);
-	}
-
-	if (CHECK_ENUM(deviceData, CurrentDeviceState))
-	{
-		strConcatenate(_topicBuff, 3, _settings.BaseTopic, TOPIC_SEPARATOR, TOPIC_DEVICE_STATE);
-
-		const char * mode = _deviceState == On ? PAYLOAD_ON : PAYLOAD_OFF;
-
-		mqttPublish(_topicBuff, (char*)mode);
-	}
-*/
-	if (CHECK_ENUM(deviceData, DeviceIsReady))
-	{
-		mqttPublish(_settings.BaseTopic, (char*)PAYLOAD_READY);
-	}
-
-	if (CHECK_ENUM(deviceData, DeviceOk))
-	{
-		mqttPublish(_settings.BaseTopic, (char*)PAYLOAD_OK);
+		MqttTopicHelper.printTopicAndPayload(topic, payload);
+		_mqttClient.publish(topic, payload);
 	}
 }
 
 /**
-* @brief Callback method. It is fire when has information in subscribed topics.
+* @brief Print in debug console Subscribed topic and payload.
 *
 * @return void
 */
-void callback(char* topic, byte* payload, unsigned int length) {
-#ifdef WIFIFCMM_DEBUG
-	printTopicAndPayload("Call back", topic, (char*)payload, length);
-#endif
+void printSubscribeTopic(char* topic, byte* payload, unsigned int length)
+{
+	DEBUG_FC_PRINTLN(F("Subscribe"));
+	MqttTopicHelper.printTopicAndPayload(topic, payload, length);
+}
 
-	size_t baseTopicLen = strlen(_settings.BaseTopic);
+/**
+* @brief Callback method. It executes when has information from subscribed topics: kmp and kmp/prodinomkrzero/#
+*
+* @return void
+*/
+void callback(char* topics, byte* payload, unsigned int payloadLen)
+{
+	bool payloadEmpty = payloadLen == 0;
+	char* payloadCh = (char*)payload;
+	payloadCh[payloadLen] = CH_NONE;
 
-	if (!startsWith(topic, _settings.BaseTopic))
+	// Broadcasting device: base_topic:NULL || base_topic/device_name:NULL
+	if ((MqttTopicHelper.isBaseTopic(topics) || MqttTopicHelper.isMainTopic(topics)) && payloadEmpty)
 	{
+		printSubscribeTopic(topics, payload, payloadLen);
+		publishTopic(BroadcastDevice);
 		return;
 	}
 
-	// Processing base topic - command sends all data from the device.
-	if (strlen(topic) == baseTopicLen && length == 0)
+	// If the topic doesn't start with base_topic/device_name it doesn't need to do.
+	if (!MqttTopicHelper.startsWithMainTopic(topics))
+		return;
+
+	// Publishing all information: base_topic/device_name:all
+	if (MqttTopicHelper.isMainTopic(topics) && isEqual(payloadCh, PAYLOAD_ALL))
 	{
-		publishAllData();
+		printSubscribeTopic(topics, payload, payloadLen);
+		publishTopic(AllData);
 		return;
 	}
 
-	// Remove prefix basetopic/
-	removeStart(topic, baseTopicLen + 1);
-
-	// All other topics finished with /set
-	strConcatenate(_topicBuff, 2, TOPIC_SEPARATOR, TOPIC_SET);
-
-	if (!endsWith(topic, _topicBuff))
-	{
+	char nextTopic[32];
+	char* otherTopics = nullptr;
+	// Get topic after  base_topic/device_name/...
+	if (!MqttTopicHelper.getNextTopic(topics, nextTopic, &otherTopics, true))
 		return;
-	}
 
-	// Remove /set
-	removeEnd(topic, strlen(_topicBuff));
-
-	// Processing topic basetopic/mode/set: heat/cold
-	if (isEqual(topic, TOPIC_MODE))
+	// window...
+	if (isEqual(nextTopic, WINDOW_TOPIC))
 	{
-		setDeviceMode((char*)payload, length);
-		return;
-	}
-
-	// Processing topic basetopic/desiredtemp/set: 22.5
-	if (isEqual(topic, TOPIC_DESIRED_TEMPERATURE))
-	{
-		memcpy(_topicBuff, payload, length);
-		_topicBuff[length] = CH_NONE;
-
-		float temp = atof(_topicBuff);
-		setDesiredTemperature(temp);
-
-		return;
-	}
-
-	// Processing topic basetopic/state/set: on, off
-	if (isEqual(topic, TOPIC_DEVICE_STATE))
-	{
-		if (isEqual((char*)payload, PAYLOAD_ON, length))
+		// [window]:null
+		if (otherTopics[0] == CH_NONE && payloadEmpty)
 		{
-			if (setDeviceState(On))
-			{
-				_lastDeviceState = On;
-			}
+			printSubscribeTopic(topics, payload, payloadLen);
+			publishTopic(WindowState);
+			return;
 		}
 
-		if (isEqual((char*)payload, PAYLOAD_OFF, length))
+		// window/set [0 (Closed), 1, 2, 3, 4 (Full opened)]
+		if (MqttTopicHelper.isTopicSet(otherTopics) && !payloadEmpty)
 		{
-			if (setDeviceState(Off))
+			int windowPos = atoi(payloadCh);
+			if (windowPos >= CloseWindow && windowPos <= FullOpen)
 			{
-				_lastDeviceState = Off;
+				printSubscribeTopic(topics, payload, payloadLen);
+				WindowOpener.setState((WindowStateType)windowPos, windowPos == CloseWindow);
 			}
+		}
+		return;
+	}
+
+	// gates:null
+	if (isEqual(nextTopic, GATES_TOPIC) && otherTopics[0] == CH_NONE && payloadEmpty)
+	{
+		printSubscribeTopic(topics, payload, payloadLen);
+		publishTopic(AllGatesState);
+		return;
+	}
+
+	// gate/...
+	if (isEqual(nextTopic, GATE_TOPIC) && payloadEmpty)
+	{
+		uint8_t inNum;
+		// [gate] /1
+		if (!MqttTopicHelper.getNextTopic(otherTopics, nextTopic, &otherTopics) || !atoUint8(nextTopic, inNum) || inNum <= 0 || inNum > OPTOIN_COUNT)
+			return;
+
+		if (otherTopics[0] == CH_NONE && payloadEmpty)
+		{
+			printSubscribeTopic(topics, payload, payloadLen);
+			publishTopic(GateState, --inNum);
 		}
 
 		return;
 	}
 }
-
 /**
 * @brief Execute first after start the device. Initialize hardware.
 *
@@ -197,18 +210,22 @@ void callback(char* topic, byte* payload, unsigned int length) {
 */
 void setup(void)
 {
-	// You can open the Arduino IDE Serial Monitor window to see what the code is doing
 	DEBUG_FC.begin(115200);
-	// Init KMP ProDino WiFi-ESP board.
-	KMPDinoWiFiESP.init();
-	KMPDinoWiFiESP.SetAllRelaysOff();
-	// Init bypass.
-	WindowOpener.init(OptoIn1, Relay1, Relay2, &publishData);
 
+	DEBUG_FC_PRINTLN(F(""));
 	DEBUG_FC_PRINTLN(F("KMP Ventilation room Mqtt application starting."));
 	DEBUG_FC_PRINTLN(F(""));
 
-	//WiFiManager
+	// Init KMP ProDino WiFi-ESP board.
+	KMPDinoWiFiESP.init();
+	KMPDinoWiFiESP.SetAllRelaysOff();
+
+	// You can open the Arduino IDE Serial Monitor window to see what the code is doing
+
+	// Init bypass.
+	WindowOpener.init(OptoIn1, Relay1, Relay2, &publishTopic);
+
+	DEBUG_FC_PRINTLN(F("WiFiManager starting..."));
 	//Local initialization. Once it's business is done, there is no need to keep it around.
 	WiFiManager wifiManager;
 
@@ -223,6 +240,7 @@ void setup(void)
 	// Set save configuration callback.
 	wifiManager.setSaveConfigCallback(saveConfigCallback);
 
+	DEBUG_FC_PRINTLN(F("Manage connect and settings..."));
 	if (!manageConnectAndSettings(&wifiManager, &_settings))
 	{
 		return;
@@ -233,6 +251,9 @@ void setup(void)
 
 	// Initialize MQTT.
 	_mqttClient.setClient(_wifiClient);
+	uint16_t port = atoi(_settings.MqttPort);
+	_mqttClient.setServer(_settings.MqttServer, port);
+	_mqttClient.setCallback(callback);
 
 	// Close window.
 	WindowOpener.setState(CloseWindow, true);
@@ -265,28 +286,9 @@ void loop(void)
 		return;
 	}
 
+	_windowCloseIfNotConnectedInterval = 0;
+
 	_mqttClient.loop();
-
-	if (!_isStarted)
-	{
-		_isStarted = true;
-		publishData(DeviceIsReady);
-	}
-}
-
-/**
-* @brief Publish topic.
-* @param topic A topic title.
-* @param payload Data to send.
-*
-* @return void
-*/
-void mqttPublish(const char* topic, char* payload)
-{
-#ifdef WIFIFCMM_DEBUG
-	printTopicAndPayload("Publish", topic, payload, strlen(payload));
-#endif
-	_mqttClient.publish(topic, (const char*)payload);
 }
 
 /**
@@ -296,55 +298,46 @@ void mqttPublish(const char* topic, char* payload)
 */
 bool connectMqtt()
 {
-	if (!_mqttClient.connected())
+	if (_mqttClient.connected())
 	{
-		DEBUG_FC_PRINTLN(F("Trying to MQTT connect..."));
-
-		uint16_t port = atoi(_settings.MqttPort);
-		_mqttClient.setServer(_settings.MqttServer, port);
-		_mqttClient.setCallback(callback);
-
-		DEBUG_FC_PRINT(F("Server: \""));
-		DEBUG_FC_PRINT(_settings.MqttServer);
-		DEBUG_FC_PRINT(F("\"\r\nPort:\""));
-		DEBUG_FC_PRINT(_settings.MqttPort);
-		DEBUG_FC_PRINT(F("\"\r\nClientId:\""));
-		DEBUG_FC_PRINT(_settings.MqttClientId);
-		DEBUG_FC_PRINT(F("\"\r\nUser:\""));
-		DEBUG_FC_PRINT(_settings.MqttUser);
-		DEBUG_FC_PRINT(F("\"\r\nPassword:\""));
-		DEBUG_FC_PRINT(_settings.MqttPass);
-		DEBUG_FC_PRINTLN(F("\""));
-
-		if (_mqttClient.connect(_settings.MqttClientId, _settings.MqttUser, _settings.MqttPass))
-		{
-			DEBUG_FC_PRINTLN(F("MQTT connected. Subscribe for topics:"));
-			// Subscribe for topics:
-			//  basetopic
-			_mqttClient.subscribe(_settings.BaseTopic);
-			DEBUG_FC_PRINTLN(_settings.BaseTopic);
-
-			//  basetopic/+/set. This pattern include:  basetopic/mode/set, basetopic/desiredtemp/set, basetopic/state/set
-			strConcatenate(_topicBuff, 5, _settings.BaseTopic, TOPIC_SEPARATOR, EVERY_ONE_LEVEL_TOPIC, TOPIC_SEPARATOR, TOPIC_SET);
-			_mqttClient.subscribe(_topicBuff);
-			DEBUG_FC_PRINTLN(_topicBuff);
-		}
-		else
-		{
-			DEBUG_FC_PRINT(F("failed, rc="));
-			DEBUG_FC_PRINT(_mqttClient.state());
-			DEBUG_FC_PRINTLN(F(" try again after 5 seconds"));
-			// Wait 5 seconds before retrying
-			delay(5000);
-		}
+		return true;
 	}
 
-	return _mqttClient.connected();
-}
+	DEBUG_FC_PRINTLN(F("Attempting to connect MQTT..."));
 
-void publishAllData()
-{
-	DeviceData deviceData = (DeviceData)
-		(CurrentDeviceState | WindowCurrentState);
-	publishData(deviceData, false);
+	DEBUG_FC_PRINT("MqttClientId: \"");
+	DEBUG_FC_PRINT(_settings.MqttClientId);
+	DEBUG_FC_PRINT("\", MqttUser: \"");
+	DEBUG_FC_PRINT(_settings.MqttUser);
+	DEBUG_FC_PRINT("\", MqttPass: ");
+	DEBUG_FC_PRINT(_settings.MqttPass);
+	DEBUG_FC_PRINT("\"");
+
+	if (_mqttClient.connect(_settings.MqttClientId, _settings.MqttUser, _settings.MqttPass))
+	{
+		DEBUG_FC_PRINTLN(F("MQTT connected. Subscribe for topics:"));
+		// Subscribe for topics:
+		//  base_topic
+		_mqttClient.subscribe(_settings.BaseTopic);
+		DEBUG_FC_PRINTLN(_settings.BaseTopic);
+
+		// Building topic with wildcard symbol: base_topic/device_name/#
+		// With this topic we are going to subscribe for all topics per device. All topics started with: base_topic/device_name
+		MqttTopicHelper.buildTopicWithMT(_topicBuff, 1, "#");
+		_mqttClient.subscribe(_topicBuff);
+		DEBUG_FC_PRINTLN(_topicBuff);
+
+		DEBUG_FC_PRINTLN(F("Connected."));
+		publishTopic(DeviceIsReady);
+
+		return true;
+	}
+
+	DEBUG_FC_PRINT(F("failed, rc="));
+	DEBUG_FC_PRINT(_mqttClient.state());
+	DEBUG_FC_PRINTLN(F(" try again after 5 seconds"));
+	// Wait 5 seconds before retrying
+	delay(5000);
+
+	return false;
 }
