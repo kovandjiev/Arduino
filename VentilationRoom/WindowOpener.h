@@ -38,7 +38,7 @@ public:
 
 	void setState(WindowStateType state, bool forceState = false);
 
-	void processWindowState();
+	void process();
 };
 
 extern WindowOpenerClass WindowOpener;

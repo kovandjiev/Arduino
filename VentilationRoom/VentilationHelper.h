@@ -53,6 +53,7 @@ const char PAYLOAD_ALL[] = "all";
 const char WINDOW_TOPIC[] = "window";
 const char GATES_TOPIC[] = "gates";
 const char GATE_TOPIC[] = "gate";
+const char VENTILATE_TOPIC[] = "ventilate";
 
 enum DeviceData
 {
@@ -62,7 +63,8 @@ enum DeviceData
 	DeviceOk,
 	WindowState,
 	GateState,
-	AllGatesState
+	AllGatesState,
+	Ventilate
 };
 
 struct DeviceSettings

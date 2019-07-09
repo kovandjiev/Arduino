@@ -15,6 +15,7 @@
 
 #include "VentilationHelper.h"
 #include "WindowOpener.h"
+#include "VentilateProcess.h"
 #include "MqttTopicHelper.h"
 #include <KMPDinoWiFiESP.h>       // Our library. https://www.kmpelectronics.eu/en-us/examples/prodinowifi-esp/howtoinstall.aspx
 #include <KMPCommon.h>
@@ -36,6 +37,9 @@ char _payloadBuff[32];
 
 bool _isConnected = false;
 unsigned long _windowCloseIfNotConnectedInterval;
+
+#define GATES_COUNT 4
+OptoIn gates[GATES_COUNT] = { OptoIn1, OptoIn2, OptoIn3, OptoIn4 };
 
 /**
 * @brief This method publishes all data per device.
@@ -68,6 +72,7 @@ void publishTopic(DeviceData deviceData, int num = 0, bool isPrintPublish = true
 		publishTopic(DeviceIsReady, 0, false);
 		publishTopic(WindowState, 0, false);
 		publishTopic(AllGatesState, 0, false);
+		publishTopic(Ventilate, 0, false);
 		break;
 	case BroadcastDevice:
 		// base_topic:NULL
@@ -95,6 +100,11 @@ void publishTopic(DeviceData deviceData, int num = 0, bool isPrintPublish = true
 	case DeviceIsReady:
 		topic = MqttTopicHelper.getIsReadyTopic();
 		payload = PAYLOAD_READY;
+		break;
+	case Ventilate:
+		MqttTopicHelper.buildTopicWithMT(_topicBuff, 1, VENTILATE_TOPIC);
+		topic = _topicBuff;
+		payload = WindowOpener.getState() ? W_ON_S : W_OFF_S;
 		break;
 	default:
 		break;
@@ -225,8 +235,9 @@ void setup(void)
 
 	// Init bypass.
 	WindowOpener.init(OptoIn1, Relay1, Relay2, &publishTopic);
+	VentilateProcess.init(gates, GATES_COUNT, &publishTopic);
 
-	DEBUG_FC_PRINTLN(F("WiFiManager starting..."));
+		DEBUG_FC_PRINTLN(F("WiFiManager starting..."));
 	//Local initialization. Once it's business is done, there is no need to keep it around.
 	WiFiManager wifiManager;
 
@@ -267,7 +278,8 @@ void setup(void)
 */
 void loop(void)
 {
-	WindowOpener.processWindowState();
+	WindowOpener.process();
+	VentilateProcess.process();
 
 	// For a normal work on device, need it be connected to WiFi and MQTT server.
 	_isConnected = connectWiFi() && connectMqtt();
