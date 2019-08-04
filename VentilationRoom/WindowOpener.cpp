@@ -54,8 +54,8 @@ void WindowOpenerClass::setState(WindowStateType state, bool forceState)
 
 	int openDifference = _windowNewState - _windowState;
 
-	DEBUG_FC_PRINT("openDifference: ");
-	DEBUG_FC_PRINTLN(openDifference);
+	//DEBUG_FC_PRINT("openDifference: ");
+	//DEBUG_FC_PRINTLN(openDifference);
 	// The window needs to be open more.
 	if (openDifference > 0)
 	{

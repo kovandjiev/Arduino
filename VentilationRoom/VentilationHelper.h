@@ -57,14 +57,14 @@ const char VENTILATE_TOPIC[] = "ventilate";
 
 enum DeviceData
 {
-	AllData,
 	BroadcastDevice,
-	DeviceIsReady,
 	DeviceOk,
+	DeviceIsReady,
 	WindowState,
 	GateState,
 	AllGatesState,
-	Ventilate
+	Ventilate,
+	AllData
 };
 
 struct DeviceSettings

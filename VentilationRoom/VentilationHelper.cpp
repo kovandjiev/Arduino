@@ -146,7 +146,7 @@ bool manageConnectAndSettings(WiFiManager* wifiManager, DeviceSettings* settings
 	}
 
 	//if you get here you have connected to the WiFi
-	DEBUG_FC_PRINTLN("Connected.");
+	DEBUG_FC_PRINTLN("WiFi is connected.");
 
 	if (_shouldSaveConfig)
 	{

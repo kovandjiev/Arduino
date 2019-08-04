@@ -17,13 +17,12 @@ If any gate is:
 topic:payload
 
 Callback:
- base_topic:null - broadcast command, respond with base_topic/device_name:OK
- base_topic/device_name:null - respond with base_topic/device_name:OK
+ base_topic:null - broadcast command, respond with base_topic/device_name:ok
+ base_topic/device_name:null - respond with base_topic/device_name:ok
  base_topic/device_name:all - send all available data per deveice
  base_topic/device_name/window:null - respond with current window state
  base_topic/device_name/window/set:[0 (Closed), 1, 2, 3, 4 (Full opened)] - open/close a window
- base_topic/device_name/gates:null - respond with all gates state
- base_topic/device_name/gate:[1..4] - respond with every gate state
+ base_topic/device_name/gate:null - respond with all gates state
 
 Publish:
  base_topic/device_name:ready - The device has jet stated. This message need to send initialize settings from the remote server. It should publish: data from the server.
@@ -33,3 +32,18 @@ Publish:
  base_topic/device_name/gate/2:[open | close] - open or close a window/door 2
  base_topic/device_name/gate/3:[open | close] - open or close a window/door 3
  base_topic/device_name/gate/4:[open | close] - open or close a window/door 4
+
+For future test:
+{
+  "state": // "ok", "ready"
+  "command": // 0 BaseCmd, 1 WindowCmd
+  "action": // -1: result, 0: get, 1:set
+  "window": // 0 (Closed), 1, 2, 3, 4 (Full opened)
+  "ventilate": // 0, 1
+  "gates":[
+    "1": // 0 (close), 1 (open)
+    "2": // 0 (close), 1 (open)
+    "3": // 0 (close), 1 (open)
+    "4": // 0 (close), 1 (open)
+  ]
+}

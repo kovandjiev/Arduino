@@ -5,10 +5,10 @@
 #include "VentilateProcess.h"
 
 #define GATE_CHANGE_STATE_MORE_THAN_MS  20 * 1000
-#define CHECK_INTERVAL_MS                2 * 1000
+#define CHECK_GATE_INTERVAL_MS          2 * 1000
 
 unsigned long _changeStateInterval;
-unsigned long _checkInterval;
+unsigned long _checkGateInterval;
 OptoIn* _gates;
 int _gateCount;
 bool _currentState;
@@ -20,6 +20,7 @@ void VentilateProcessClass::init(OptoIn* gates, int gateCount, callBackPublishVe
 	_gates = gates;
 	_gateCount = gateCount;
 	_publishVentilationCallBack = publishData;
+	_currentState = false;
 
 	_waitingForChange = false;
 }
@@ -31,23 +32,23 @@ bool VentilateProcessClass::getState()
 
 void VentilateProcessClass::process()
 {
-	if (_checkInterval > millis())
+	if (_checkGateInterval > millis())
 	{
 		return;
 	}
-	_checkInterval = CHECK_INTERVAL_MS + millis();
+	_checkGateInterval = CHECK_GATE_INTERVAL_MS + millis();
 
-	bool stateNow = false;
+	bool isOpened = false;
 	for (int i = 0; i < _gateCount; i++)
 	{
 		if (KMPDinoWiFiESP.GetOptoInState(_gates[i]))
 		{
-			stateNow = true;
+			isOpened = true;
 			break;
 		}
 	}
 
-	if (stateNow == _currentState)
+	if (isOpened == _currentState)
 	{
 		_waitingForChange = false;
 		return;
@@ -61,7 +62,7 @@ void VentilateProcessClass::process()
 
 	if (_changeStateInterval < millis())
 	{
-		_currentState = stateNow;
+		_currentState = isOpened;
 
 		publishState();
 	}

@@ -67,20 +67,23 @@ void publishTopic(DeviceData deviceData, int num = 0, bool isPrintPublish = true
 
 	switch (deviceData)
 	{
-	case AllData:
-		// base_topic/device_name:NULL
-		publishTopic(DeviceIsReady, 0, false);
-		publishTopic(WindowState, 0, false);
-		publishTopic(AllGatesState, 0, false);
-		publishTopic(Ventilate, 0, false);
-		break;
 	case BroadcastDevice:
-		// base_topic:NULL
+		// base_topic:null
 		topic = MqttTopicHelper.getMainTopic();
-		payload = W_OK;
+		payload = W_OK_S;
+		break;
+	case DeviceOk:
+		// base_topic/device_name:null
+		topic = MqttTopicHelper.getMainTopic();
+		payload = W_OK_S;
+		break;
+	case DeviceIsReady:
+		// base_topic/device_name:ready
+		topic = MqttTopicHelper.getMainTopic();
+		payload = PAYLOAD_READY;
 		break;
 	case WindowState:
-		// base_topic/device_name/window:NULL
+		// base_topic/device_name/window:null OR after set new value
 		MqttTopicHelper.buildTopicWithMT(_topicBuff, 1, WINDOW_TOPIC);
 		topic = _topicBuff;
 		IntToChars(WindowOpener.getState(), numBuff);
@@ -94,17 +97,22 @@ void publishTopic(DeviceData deviceData, int num = 0, bool isPrintPublish = true
 		payload = KMPDinoWiFiESP.GetOptoInState(num) ? PAYLOAD_OPEN : PAYLOAD_CLOSE;
 		break;
 	case AllGatesState:
+		// base_topic/device_name/gate:null
 		for (size_t i = 0; i < OPTOIN_COUNT; i++)
 			publishTopic(GateState, i, false);
 		break;
-	case DeviceIsReady:
-		topic = MqttTopicHelper.getIsReadyTopic();
-		payload = PAYLOAD_READY;
-		break;
 	case Ventilate:
+		// Publish after any gate is on or all is off base_topic/device_name/ventilate:[on | off]
 		MqttTopicHelper.buildTopicWithMT(_topicBuff, 1, VENTILATE_TOPIC);
 		topic = _topicBuff;
-		payload = WindowOpener.getState() ? W_ON_S : W_OFF_S;
+		payload = VentilateProcess.getState() ? W_ON_S : W_OFF_S;
+		break;
+	case AllData:
+		// base_topic/device_name:all
+		//publishTopic(DeviceOk, 0, false);
+		publishTopic(WindowState, 0, false);
+		publishTopic(AllGatesState, 0, false);
+		publishTopic(Ventilate, 0, false);
 		break;
 	default:
 		break;
@@ -143,7 +151,14 @@ void callback(char* topics, byte* payload, unsigned int payloadLen)
 	if ((MqttTopicHelper.isBaseTopic(topics) || MqttTopicHelper.isMainTopic(topics)) && payloadEmpty)
 	{
 		printSubscribeTopic(topics, payload, payloadLen);
-		publishTopic(BroadcastDevice);
+		if (MqttTopicHelper.isBaseTopic(topics))
+		{
+			publishTopic(BroadcastDevice);
+		}
+		else
+		{
+			publishTopic(DeviceOk);
+		}
 		return;
 	}
 
@@ -189,28 +204,11 @@ void callback(char* topics, byte* payload, unsigned int payloadLen)
 		return;
 	}
 
-	// gates:null
-	if (isEqual(nextTopic, GATES_TOPIC) && otherTopics[0] == CH_NONE && payloadEmpty)
+	// gate:null
+	if (isEqual(nextTopic, GATE_TOPIC) && otherTopics[0] == CH_NONE && payloadEmpty)
 	{
 		printSubscribeTopic(topics, payload, payloadLen);
 		publishTopic(AllGatesState);
-		return;
-	}
-
-	// gate/...
-	if (isEqual(nextTopic, GATE_TOPIC) && payloadEmpty)
-	{
-		uint8_t inNum;
-		// [gate] /1
-		if (!MqttTopicHelper.getNextTopic(otherTopics, nextTopic, &otherTopics) || !atoUint8(nextTopic, inNum) || inNum <= 0 || inNum > OPTOIN_COUNT)
-			return;
-
-		if (otherTopics[0] == CH_NONE && payloadEmpty)
-		{
-			printSubscribeTopic(topics, payload, payloadLen);
-			publishTopic(GateState, --inNum);
-		}
-
 		return;
 	}
 }
@@ -282,7 +280,15 @@ void loop(void)
 	VentilateProcess.process();
 
 	// For a normal work on device, need it be connected to WiFi and MQTT server.
-	_isConnected = connectWiFi() && connectMqtt();
+	bool isConnected = connectWiFi() && connectMqtt();
+	bool lastStatus = _isConnected;
+
+	_isConnected = isConnected;
+
+	if (isConnected && !lastStatus)
+	{
+		publishTopic(DeviceIsReady);
+	}
 
 	if (!_isConnected)
 	{
@@ -324,7 +330,7 @@ bool connectMqtt()
 	DEBUG_FC_PRINT(_settings.MqttUser);
 	DEBUG_FC_PRINT("\", MqttPass: ");
 	DEBUG_FC_PRINT(_settings.MqttPass);
-	DEBUG_FC_PRINT("\"");
+	DEBUG_FC_PRINTLN("\"");
 
 	if (_mqttClient.connect(_settings.MqttClientId, _settings.MqttUser, _settings.MqttPass))
 	{
@@ -339,9 +345,6 @@ bool connectMqtt()
 		MqttTopicHelper.buildTopicWithMT(_topicBuff, 1, "#");
 		_mqttClient.subscribe(_topicBuff);
 		DEBUG_FC_PRINTLN(_topicBuff);
-
-		DEBUG_FC_PRINTLN(F("Connected."));
-		publishTopic(DeviceIsReady);
 
 		return true;
 	}
