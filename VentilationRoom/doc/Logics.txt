@@ -1,3 +1,5 @@
+WiFi connection is waiting for 60 seconds before switch to Access point
+
 Base topic. Use it for broadcast. See first callback.
 Device name. Example: room_name.
 
