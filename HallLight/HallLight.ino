@@ -8,7 +8,7 @@ Hall light project is for fade switch on or off lights in my hall.
 //#define DEBUG
 
 // These pins check for change state low, high.
-const byte CHECK_INPUTS[CHECK_INPUTS_LEN] = { 
+const byte CHECK_INPUTS[CHECK_INPUTS_LEN] = {
 	A0, // PIR1 Hall short part
 	15, // PIR2 Hall long part
 	14, // Door Kitchen and Living room
@@ -20,6 +20,7 @@ const byte CHECK_INPUTS[CHECK_INPUTS_LEN] = {
 	5,  // Door wet room
 	6   // Door Bedroom 1
 };
+
 const byte NO_POWER_INPUT = 7; // Power exists 1 - has power, 0 - hasn't power Pull down. Is power down, dimming all lights on 50%.
 const byte IS_NIGHT_INPUT = 8; // Is day or night 0 - day, 1 - night Pull down. Is night arrives, dimming on 30% light.
 const byte DIMMER_OUTPUT = 9;  // Dimmer output PWM. Connect to dimmers.
@@ -31,15 +32,24 @@ const int MAX_BRIGHTNESS_NO_POWER = 127;
 const unsigned long DELAY_LIGHTS_ON_MS = 60000; //5000; // 60000 One minute is on
 const unsigned long FADE_DELAY_ON_MS = 8; // Waiting before switch to next level up light. Fast up.
 const unsigned long FADE_DELAY_OFF_MS = 100; // Waiting before switch to next level down light. Slow down.
+const unsigned long NOISE_CLEAR_MS = 100; // Clear noise if turn on/off inputs
+const unsigned long NOISE_CLEAR_LONG_MS = 1000; // Clear noise if turn on/off inputs
 const int FADE_POINTS = 1;    // 5 how many points to fade the LED by
 
 bool _inputState[CHECK_INPUTS_LEN];
+unsigned long _inputNoiseClear[CHECK_INPUTS_LEN];
 
-int _brightness = 0;    // how bright the LED is
-unsigned long _lightDelay = 0;
+int _currentBrightness = 0;    // how bright the LED is
+int _lastBrightness = 0;    // how bright the LED is
+unsigned long _lightEndTime = 0;
 unsigned long _fadeDelay = 0;
+bool _isNight = false;
+unsigned long _isNightNoiseClear = 0;
+bool _noPower = false;
+unsigned long _noPowerNoiseClear = 0;
+unsigned long _millis;
 
-void setup() 
+void setup()
 {
 #ifdef DEBUG
 	Serial.begin(9600);
@@ -57,7 +67,7 @@ void setup()
 		// Initialize compare array.
 		_inputState[i] = digitalRead(CHECK_INPUTS[i]);
 	}
-	
+
 	pinMode(NO_POWER_INPUT, INPUT);
 	pinMode(IS_NIGHT_INPUT, INPUT);
 
@@ -92,64 +102,54 @@ void setup()
 #endif // DEBUG
 }
 
-void loop() 
+void loop()
 {
 	wdt_reset();
 
-	bool inState = processInputs();
+	_millis = millis();
 
-	bool lighState = processState(inState);
+	bool inState = processInputs();
+	if (inState)
+	{
+		_lightEndTime = _millis + DELAY_LIGHTS_ON_MS;
+	}
+	bool isLigthOn = _lightEndTime > _millis;
 
 	int maxBrightness = getMaxBrightness();
 
-	int newBrightness = processBrightness(lighState, _brightness, maxBrightness);
+	processBrightness(isLigthOn, maxBrightness);
 
-	setBrightness(newBrightness);
-
-	digitalWrite(LIGHTS_IS_ON_OUTPUT, _brightness > 0 ? HIGH : LOW);
-}
-
-void setBrightness(int brightness)
-{
-	if (_brightness != brightness)
+	if (_currentBrightness != _lastBrightness)
 	{
-		analogWrite(DIMMER_OUTPUT, brightness);
+		analogWrite(DIMMER_OUTPUT, _currentBrightness);
 
-		_brightness = brightness;
-#ifdef DEBUG
-		Serial.println(brightness);
-#endif // DEBUG
+		// Set Light is On output state
+		if (_lastBrightness == 0 || _currentBrightness == 0)
+		{
+			digitalWrite(LIGHTS_IS_ON_OUTPUT, _currentBrightness > 0 ? HIGH : LOW);
+		}
+
+		_lastBrightness = _currentBrightness;
 	}
 }
 
-int processBrightness(bool lighState, int currentBrightness, int maxBrightness)
+void processBrightness(bool lighState, int maxBrightness)
 {
-	unsigned long time = millis();
-
-	if (_fadeDelay > time)
+	if (_fadeDelay > _millis)
 	{
-		return currentBrightness;
+		return;
 	}
 
-	int newBrightness = currentBrightness;
+	int newBrightness = _currentBrightness;
 
-	if (newBrightness > maxBrightness)
-	{
-		newBrightness = maxBrightness;
-	}
-	
 	if (lighState) // On
 	{
 		if (newBrightness < maxBrightness)
 		{
 			newBrightness += FADE_POINTS;
-			if (newBrightness > maxBrightness)
-			{
-				newBrightness = maxBrightness;
-			}
 
-			_fadeDelay = time + FADE_DELAY_ON_MS;
-			_lightDelay = time + DELAY_LIGHTS_ON_MS;
+			_fadeDelay = _millis + FADE_DELAY_ON_MS;
+			_lightEndTime = _millis + DELAY_LIGHTS_ON_MS;
 		}
 	}
 	else // Off
@@ -157,41 +157,46 @@ int processBrightness(bool lighState, int currentBrightness, int maxBrightness)
 		if (newBrightness > 0)
 		{
 			newBrightness -= FADE_POINTS;
-			if (newBrightness < 0)
-			{
-				newBrightness = 0;
-			}
 
-			_fadeDelay = time + FADE_DELAY_OFF_MS;
+			_fadeDelay = _millis + FADE_DELAY_OFF_MS;
 		}
 	}
 
-	return newBrightness;
-}
-
-bool processState(bool inState)
-{
-	unsigned long time = millis();
-
-	if (inState)
+	if (newBrightness > maxBrightness)
 	{
-		_lightDelay = time + DELAY_LIGHTS_ON_MS;
-		_fadeDelay = 0;
+		newBrightness = maxBrightness;
 	}
 
-	return _lightDelay > time;
+	if (newBrightness < 0)
+	{
+		newBrightness = 0;
+	}
+
+	_currentBrightness = newBrightness;
 }
 
 int getMaxBrightness()
 {
 	// Night arrived - active High
-	if (digitalRead(IS_NIGHT_INPUT) == HIGH)
+	bool isNight = digitalRead(IS_NIGHT_INPUT) == HIGH;
+	if (isNotNoise(isNight != _isNight, NOISE_CLEAR_LONG_MS, &_isNightNoiseClear))
+	{
+		_isNight = isNight;
+	}
+
+	if (_isNight)
 	{
 		return MAX_BRIGHTNESS_NIGHT;
 	}
 
 	// No main power - active Low
-	if (digitalRead(NO_POWER_INPUT) == LOW)
+	bool noPower = digitalRead(NO_POWER_INPUT) == LOW;
+	if (isNotNoise(noPower != _noPower, NOISE_CLEAR_LONG_MS, &_noPowerNoiseClear))
+	{
+		_noPower = noPower;
+	}
+
+	if (_noPower)
 	{
 		return MAX_BRIGHTNESS_NO_POWER;
 	}
@@ -206,18 +211,44 @@ bool processInputs()
 	for (byte i = 0; i < CHECK_INPUTS_LEN; i++)
 	{
 		bool inputState = digitalRead(CHECK_INPUTS[i]);
-		
-		if (inputState != _inputState[i])
+
+		if (isNotNoise(inputState != _inputState[i], NOISE_CLEAR_MS, &_inputNoiseClear[i]))
 		{
 #ifdef DEBUG
 			Serial.print(CHECK_INPUTS[i]);
 			Serial.print(" Input is changed: ");
 			Serial.println(_inputState[i]);
 #endif // DEBUG
+
 			_inputState[i] = inputState;
 			result = true;
 		}
 	}
 
 	return result;
+}
+
+bool isNotNoise(const bool status, const unsigned long delay, unsigned long* timeout)
+{
+	if (status)
+	{
+		if (0 == *timeout)
+		{
+			*timeout = _millis + delay;
+		}
+		else
+		{
+			if (_millis > *timeout)
+			{
+				*timeout = 0;
+				return true;
+			}
+		}
+	}
+	else
+	{
+		*timeout = 0;
+	}
+
+	return false;
 }
